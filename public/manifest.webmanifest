@@ -1,0 +1,10 @@
+{
+  "name": "Hermes Workout",
+  "short_name": "Hermes",
+  "description": "A local-first home strength tracker with an interactive 3D movement guide.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#14251f",
+  "theme_color": "#14251f",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
