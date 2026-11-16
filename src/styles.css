@@ -2240,7 +2240,7 @@ main {
   border-radius: 50%;
 }
 .trainer-options i.on {
-  background: #939393;
+  background: #e3262b;
 }
 .trainer-options i.on:after {
   left: 13px;

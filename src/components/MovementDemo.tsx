@@ -37,6 +37,8 @@ const focusLabels: Record<string, string> = {
 };
 const unilateral = ['heel', 'bird', 'split'];
 const ACCENT = '#ffffff';
+/** Focus areas are painted and pulsed in this red. */
+const FOCUS = '#e3262b';
 const DEFAULT_AZIMUTH = 0.65;
 // The wall push-up wall stands in front of the trainer, so view it from the side.
 const angleFor = (exercise: string) => (exercise === 'pushup' ? 1.95 : DEFAULT_AZIMUTH);
@@ -118,17 +120,17 @@ function glowOnMask(material: THREE.Material, pulse: Pulse) {
       )
       .replace(
         '#include <emissivemap_fragment>',
-        `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(0.46, 0.55, 0.2) * vActive * uPulse;`,
+        `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(0.85, 0.06, 0.05) * vActive * uPulse;`,
       );
   };
 }
 
 function bodyColors(model: THREE.Object3D, exercise: string, highlight: boolean, pulse: Pulse) {
   const v = new THREE.Vector3(),
-    skin = new THREE.Color('#d2d2d2'),
-    shirt = new THREE.Color('#2a2a2a'),
-    shorts = new THREE.Color('#121212'),
-    accent = new THREE.Color(ACCENT);
+    skin = new THREE.Color('#c98d6b'),
+    shirt = new THREE.Color('#2f6fb5'),
+    shorts = new THREE.Color('#1c2a44'),
+    accent = new THREE.Color(FOCUS);
   model.updateMatrixWorld(true);
   model.traverse((obj) => {
     if (!(obj instanceof THREE.SkinnedMesh)) return;
@@ -183,7 +185,7 @@ function bodyColors(model: THREE.Object3D, exercise: string, highlight: boolean,
         metalness: 0,
         sheen: eye ? 0 : 0.7,
         sheenRoughness: 0.55,
-        sheenColor: new THREE.Color('#d4d4d4'),
+        sheenColor: new THREE.Color('#f0d6c4'),
       });
       if (!eye) glowOnMask(obj.material, pulse);
       obj.userData.materialReplaced = true;
@@ -460,7 +462,7 @@ export default function MovementDemo({
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = -0.042;
     }
-    box([0, -0.03, 0], [1.5, 0.025, floorPose ? 2.8 : 1.5], '#393939', 0, 0.011);
+    box([0, -0.03, 0], [1.5, 0.025, floorPose ? 2.8 : 1.5], '#2e5a4c', 0, 0.011);
     const contact = decor(
       new THREE.Mesh(
         new THREE.PlaneGeometry(1, 1),
@@ -480,7 +482,7 @@ export default function MovementDemo({
     contact.rotation.x = -Math.PI / 2;
     contact.position.y = -0.0165;
     contact.scale.set(floorPose ? 1.15 : 1.05, floorPose ? 2.3 : 1.05, 1);
-    const rubber = own(new THREE.MeshStandardMaterial({ color: '#1e1e1e', roughness: 0.55 }));
+    const rubber = own(new THREE.MeshStandardMaterial({ color: '#2b2f36', roughness: 0.55 }));
     const dumbbellGeometry = {
       handle: own(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 16)),
       head: own(new THREE.CylinderGeometry(0.085, 0.085, 0.07, 6)),
@@ -529,12 +531,12 @@ export default function MovementDemo({
         scene.add(model);
         rig = createTrainerRig(model);
         rig.getEquipment(exercise).forEach((e) => {
-          const pad = '#7f7f7f',
-            frame = '#333333';
+          const pad = '#4a5568',
+            frame = '#3a3f47';
           const mesh = box(
             e.position,
             e.size,
-            e.kind === 'bench' ? pad : e.kind === 'wall' ? '#2a2a2a' : frame,
+            e.kind === 'bench' ? pad : e.kind === 'wall' ? '#9fb3c8' : frame,
             e.rotationX || 0,
             e.kind === 'bench' ? 0.04 : 0.01,
           );
@@ -549,11 +551,11 @@ export default function MovementDemo({
           if (e.kind === 'bench') {
             for (const z of [-e.size[2] * 0.34, e.size[2] * 0.34]) {
               const y = Math.max(0.1, (e.position[1] - Math.tan(e.rotationX || 0) * z - 0.045) / 2);
-              box([e.position[0], y, e.position[2] + z], [0.06, y * 2, 0.065], '#c3c3c3');
+              box([e.position[0], y, e.position[2] + z], [0.06, y * 2, 0.065], '#b9bec6');
               box(
                 [e.position[0], 0.035, e.position[2] + z],
                 [0.62, 0.055, 0.12],
-                '#333333',
+                '#3a3f47',
                 0,
                 0.02,
               );
@@ -563,7 +565,7 @@ export default function MovementDemo({
             box(
               [e.position[0], e.position[1] / 2, e.position[2] + 0.24],
               [0.055, e.position[1], 0.055],
-              '#828282',
+              '#a07a52',
             );
         });
         loaded = true;
