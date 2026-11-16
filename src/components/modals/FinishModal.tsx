@@ -1,6 +1,7 @@
 import { Check, X } from 'lucide-react';
 
 type Props = {
+  checkInLabel: string;
   doneSets: number;
   totalSets: number;
   after: number;
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export default function FinishModal({
+  checkInLabel,
   doneSets,
   totalSets,
   after,
@@ -42,10 +44,12 @@ export default function FinishModal({
         </p>
         <div className="two-fields">
           <label>
-            Back after · 0–10
+            {checkInLabel} after · 0–10 discomfort
             <select value={after} onChange={(e) => onAfterChange(Number(e.target.value))}>
               {Array.from({ length: 11 }, (_, i) => (
-                <option key={i}>{i}</option>
+                <option key={i} value={i}>
+                  {i}
+                </option>
               ))}
             </select>
           </label>
@@ -60,8 +64,8 @@ export default function FinishModal({
         </div>
         {after > 0 && (
           <div className="notice">
-            Your back symptoms have increased. Reduce the next session and seek advice if symptoms
-            persist or recur. Avoid movements that worsen pain.
+            Noted. If discomfort is higher than before the session, reduce the next one and seek
+            advice if it persists or recurs. Avoid movements that make it worse.
           </div>
         )}
         <label>

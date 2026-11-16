@@ -8,22 +8,21 @@ import {
   Plus,
   ShieldCheck,
 } from 'lucide-react';
+import { addDays, weekday, labelDate, type Session, type State } from '../../lib/training';
 import {
-  exercises,
-  addDays,
-  weekday,
-  weekAt,
-  schedule,
-  labelDate,
-  type Exercise,
-  type Session,
-  type State,
-} from '../../lib/training';
+  planWeek as weekOfPlan,
+  workoutById,
+  workoutExercises,
+  workoutOn,
+  type Plan,
+  type PlanExercise,
+} from '../../lib/plan';
 import { uid } from '../../lib/export';
 import ExerciseList, { type UpdateSet } from '../ExerciseList';
 import LazyMovementDemo from '../LazyMovementDemo';
 
 type Props = {
+  plan: Plan;
   data: State;
   save: (state: State) => void;
   day: string;
@@ -36,8 +35,8 @@ type Props = {
   onWalkMinutesChange: (minutes: number) => void;
   modalOpen: boolean;
   onOpenPlan: (week: number) => void;
-  onStartWorkout: (type: 'A' | 'B') => void;
-  onOpenExercise: (exercise: Exercise) => void;
+  onStartWorkout: (type: string) => void;
+  onOpenExercise: (exercise: PlanExercise) => void;
   onUpdateSet: UpdateSet;
   onDiscard: () => void;
   onFinish: () => void;
@@ -46,6 +45,7 @@ type Props = {
 };
 
 export default function TodayTab({
+  plan,
   data: d,
   save,
   day,
@@ -70,11 +70,16 @@ export default function TodayTab({
   const thisWeek = d.sessions.filter((s) => s.date >= monday && s.date < addDays(monday, 7));
   let nextDate = day;
   for (let i = 0; i < 60; i++) {
-    if (schedule(d.startDate, nextDate) && !d.sessions.some((s) => s.date === nextDate)) break;
+    if (workoutOn(plan, d.startDate, nextDate) && !d.sessions.some((s) => s.date === nextDate))
+      break;
     nextDate = addDays(nextDate, 1);
   }
-  const nextType = schedule(d.startDate, nextDate);
-  const currentType = nextType || 'A';
+  const nextType = workoutOn(plan, d.startDate, nextDate);
+  const currentType = nextType || plan.workouts[0].id;
+  const current = workoutById(plan, currentType) ?? plan.workouts[0];
+  const currentExercises = workoutExercises(plan, current);
+  const heroDemo = currentExercises.find((e) => e.demo);
+  const perWeek = plan.days.length;
   return (
     <>
       <div className="page-heading">
@@ -88,14 +93,14 @@ export default function TodayTab({
       <div className="week-strip">
         {Array.from({ length: 7 }, (_, i) => {
           const date = addDays(monday, i),
-            type = schedule(d.startDate, date),
+            type = workoutOn(plan, d.startDate, date),
             completed = d.sessions.some((s) => s.date === date);
           return (
             <button
               key={date}
               className={(date === day ? 'current ' : '') + (completed ? 'done' : '')}
               onClick={() => {
-                onOpenPlan(weekAt(d.startDate, date));
+                onOpenPlan(weekOfPlan(plan, d.startDate, date));
               }}
             >
               <span>{['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'][i]}</span>
@@ -118,7 +123,7 @@ export default function TodayTab({
           <div className="section-heading">
             <div>
               <div className="eyebrow">IN PROGRESS · WEEK {draft.week}</div>
-              <h2>Workout {draft.type}</h2>
+              <h2>{workoutById(plan, draft.type)?.name ?? `Workout ${draft.type}`}</h2>
             </div>
             <span className="pill">
               <Clock size={14} />
@@ -135,6 +140,7 @@ export default function TodayTab({
             <span>Leave {draft.week === 1 ? '3–4' : '2–3'} good reps in reserve</span>
           </div>
           <ExerciseList
+            plan={plan}
             type={draft.type}
             training
             draft={draft}
@@ -157,8 +163,8 @@ export default function TodayTab({
             <div className="hero-copy">
               <span className="pill lime">
                 {nextType
-                  ? `WEEK ${weekAt(d.startDate, nextDate)} · ${nextDate === day ? 'TODAY' : labelDate(nextDate).toUpperCase()}`
-                  : 'EIGHT WEEKS COMPLETE'}
+                  ? `WEEK ${weekOfPlan(plan, d.startDate, nextDate)} · ${nextDate === day ? 'TODAY' : labelDate(nextDate).toUpperCase()}`
+                  : `${plan.weeks} WEEKS COMPLETE`}
               </span>
               <h2>
                 {nextType ? (
@@ -177,20 +183,21 @@ export default function TodayTab({
               </h2>
               <p>
                 {nextType
-                  ? `Workout ${currentType} · Full body foundations`
+                  ? `${current.name} · ${current.focus}`
                   : 'Review your progress before starting another block.'}
               </p>
               <div className="hero-meta">
                 <span>
                   <Clock size={16} />
-                  {weekAt(d.startDate, nextDate) === 1 ? '20–30' : '35–45'} min
+                  {plan.minutes} min
                 </span>
                 <span>
-                  <Dumbbell size={16} />6 movements
+                  <Dumbbell size={16} />
+                  {currentExercises.length} movements
                 </span>
               </div>
               <button className="primary" onClick={() => onStartWorkout(currentType)}>
-                {nextType ? `Start workout ${currentType}` : 'Repeat workout A'}
+                {nextType ? `Start ${current.name}` : `Repeat ${current.name}`}
                 <ArrowRight size={19} />
               </button>
               <span className="hero-footnote">
@@ -200,8 +207,8 @@ export default function TodayTab({
               </span>
             </div>
             <div className="hero-visual">
-              {!modalOpen && <LazyMovementDemo exercise="squat" compact />}
-              <button onClick={() => onOpenExercise(exercises[0])}>
+              {!modalOpen && <LazyMovementDemo exercise={heroDemo?.demo ?? 'march'} compact />}
+              <button onClick={() => onOpenExercise(heroDemo ?? currentExercises[0])}>
                 Explore the movement <ArrowRight size={14} />
               </button>
             </div>
@@ -216,20 +223,23 @@ export default function TodayTab({
                   cy="60"
                   r="51"
                   style={{
-                    strokeDasharray: `${(Math.min(3, thisWeek.length) / 3) * 320} 320`,
+                    strokeDasharray: `${(Math.min(perWeek, thisWeek.length) / perWeek) * 320} 320`,
                   }}
                 />
               </svg>
               <div>
                 <strong>
                   {thisWeek.length}
-                  <small>/3</small>
+                  <small>/{perWeek}</small>
                 </strong>
                 <span>sessions this week</span>
               </div>
             </div>
             <h3>Show up for yourself.</h3>
-            <p>Your goal is three comfortable sessions, with a rest day between them.</p>
+            <p>
+              Your goal is {perWeek} comfortable session{perWeek === 1 ? '' : 's'} this week.
+              Recovery days count too.
+            </p>
           </section>
         </div>
       )}
@@ -289,7 +299,7 @@ export default function TodayTab({
               <Activity size={17} /> Move for 2–3 minutes every 30 minutes
             </span>
             <span>
-              <ShieldCheck size={17} /> Stop if back symptoms return
+              <ShieldCheck size={17} /> Stop if pain is sharp or increasing
             </span>
           </div>
           <button className="text-button" onClick={() => onOpenSettings()}>
@@ -303,13 +313,14 @@ export default function TodayTab({
         .map((s) => (
           <section className="card next-check" key={s.id}>
             <div>
-              <strong>How is your back this morning?</strong>
+              <strong>Next-morning check-in: {plan.checkInLabel.toLowerCase()}</strong>
               <p>
-                Follow up on workout {s.type} from {labelDate(s.date)}. 0 = no pain, 10 = severe.
+                Follow up on {workoutById(plan, s.type)?.name ?? `workout ${s.type}`} from{' '}
+                {labelDate(s.date)}. 0 = no discomfort, 10 = severe.
               </p>
             </div>
             <select
-              aria-label="Next morning back score"
+              aria-label={`Next morning ${plan.checkInLabel.toLowerCase()} score`}
               defaultValue=""
               onChange={(e) => {
                 save({

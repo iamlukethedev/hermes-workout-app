@@ -1,14 +1,13 @@
+import { addDays, weekday, type Session, type State } from './training';
 import {
-  addDays,
-  exercises,
-  schedule,
-  setCount,
-  weekAt,
-  weekday,
-  workouts,
-  type Session,
-  type State,
-} from './training';
+  classicPlan,
+  planWeek,
+  setsFor,
+  workoutById,
+  workoutExercises,
+  workoutOn,
+  type Plan,
+} from './plan';
 
 /** Small seeded PRNG so the sample log is the same on every load. */
 function mulberry32(seed: number) {
@@ -22,12 +21,13 @@ function mulberry32(seed: number) {
 }
 
 const startingKg: Record<string, number> = { press: 6, row: 7, curl: 4 };
+const DEFAULT_KG = 5;
 
 /**
  * A realistic three-week log ending yesterday, for exploring the app without
  * training first. The programme starts on the Monday three weeks before `today`.
  */
-export function createSampleState(today: string): State {
+export function createSampleState(today: string, plan: Plan = classicPlan()): State {
   const rand = mulberry32(20261116);
   const between = (lo: number, hi: number) => lo + Math.floor(rand() * (hi - lo + 1));
   const thisMonday = addDays(today, -((weekday(today) + 6) % 7));
@@ -37,21 +37,21 @@ export function createSampleState(today: string): State {
   const done: Record<string, number> = {};
 
   for (let date = startDate; date < today; date = addDays(date, 1)) {
-    const type = schedule(startDate, date);
+    const type = workoutOn(plan, startDate, date);
     if (!type) {
       if (rand() < 0.75)
         walks.push({ id: `sample-walk-${date}`, date, minutes: 5 * between(3, 8) });
       continue;
     }
-    const week = weekAt(startDate, date);
+    const week = planWeek(plan, startDate, date);
     const sets: Session['sets'] = {};
-    workouts[type].forEach((id, index) => {
-      const ex = exercises.find((e) => e.id === id)!;
-      const sessionsDone = (done[id] = (done[id] ?? 0) + 1) - 1;
-      const kg = ex.weighted ? startingKg[id] + Math.floor(sessionsDone / 2) * 1 : 0;
-      sets[id] = Array.from({ length: setCount(week, index) }, () => ({
+    workoutExercises(plan, workoutById(plan, type)!).forEach((ex) => {
+      const sessionsDone = (done[ex.id] = (done[ex.id] ?? 0) + 1) - 1;
+      const base = ex.startKg || startingKg[ex.demo ?? ''] || DEFAULT_KG;
+      const kg = ex.weighted ? base + Math.floor(sessionsDone / 2) : 0;
+      sets[ex.id] = Array.from({ length: setsFor(plan, week, ex) }, () => ({
         kg,
-        reps: between(ex.range[0], ex.range[1]),
+        reps: between(ex.reps[0], ex.reps[1]),
         done: true,
       }));
     });
@@ -71,5 +71,5 @@ export function createSampleState(today: string): State {
       sets,
     });
   }
-  return { startDate, sessions, draft: null, walks };
+  return { startDate, sessions, draft: null, walks, plan };
 }

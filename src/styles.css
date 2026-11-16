@@ -2437,3 +2437,75 @@ main {
   background: var(--ink);
   box-shadow: 0 0 0 3px #d4d4d4;
 }
+
+/* Exercises without a rigged 3D demo. */
+.movement-art-text {
+  background: repeating-linear-gradient(135deg, #141414 0 2px, #1d1d1d 2px 9px);
+}
+.movement-glyph-text {
+  position: relative;
+  z-index: 1;
+  padding: 0 24px;
+  color: #fff;
+  font-family: 'Manrope Variable', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  text-align: center;
+  line-height: 1.1;
+}
+.no-demo {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 180px;
+  padding: 24px;
+  border-radius: 16px;
+  text-align: center;
+  color: #fff;
+  background: repeating-linear-gradient(135deg, #141414 0 2px, #1d1d1d 2px 9px);
+}
+.no-demo span {
+  color: #bdbdbd;
+  font-size: 13px;
+}
+.exercise-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+.exercise-facts span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.plan-credit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.plan-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  margin-bottom: 18px;
+  border: 1px solid var(--ink);
+  border-radius: 14px;
+}
+.plan-settings > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.plan-settings .secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}

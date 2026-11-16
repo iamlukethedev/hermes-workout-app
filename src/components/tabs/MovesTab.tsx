@@ -1,13 +1,17 @@
-import { ChevronRight, Play } from 'lucide-react';
-import { exercises, type Exercise } from '../../lib/training';
+import { BookOpen, ChevronRight, Play } from 'lucide-react';
+import type { Plan, PlanExercise } from '../../lib/plan';
 
 type Props = {
+  plan: Plan;
   filter: string;
   onFilterChange: (filter: string) => void;
-  onOpenExercise: (exercise: Exercise) => void;
+  onOpenExercise: (exercise: PlanExercise) => void;
 };
 
-export default function MovesTab({ filter, onFilterChange, onOpenExercise }: Props) {
+export default function MovesTab({ plan, filter, onFilterChange, onOpenExercise }: Props) {
+  const groups = ['All', ...new Set(plan.exercises.map((e) => e.group))];
+  const active = groups.includes(filter) ? filter : 'All';
+  const shown = plan.exercises.filter((e) => active === 'All' || e.group === active);
   return (
     <>
       <div className="page-heading">
@@ -17,56 +21,56 @@ export default function MovesTab({ filter, onFilterChange, onOpenExercise }: Pro
           <p>Watch. Rotate. Slow it down. Then move through a range that feels comfortable.</p>
         </div>
       </div>
-      <div className="filter-row">
-        {['All', 'Legs', 'Upper body', 'Core & hips'].map((x) => (
-          <button
-            className={filter === x ? 'selected' : ''}
-            key={x}
-            onClick={() => onFilterChange(x)}
-          >
-            {x}
-          </button>
-        ))}
-      </div>
+      {groups.length > 2 && (
+        <div className="filter-row">
+          {groups.map((x) => (
+            <button
+              className={active === x ? 'selected' : ''}
+              key={x}
+              onClick={() => onFilterChange(x)}
+            >
+              {x}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="movement-grid">
-        {exercises
-          .filter(
-            (e) =>
-              filter === 'All' ||
-              (filter === 'Legs' && ['squat', 'split', 'calf'].includes(e.id)) ||
-              (filter === 'Upper body' && ['press', 'row', 'pushup', 'curl'].includes(e.id)) ||
-              (filter === 'Core & hips' && ['heel', 'bird', 'bridge'].includes(e.id)),
-          )
-          .map((e) => (
-            <button className="movement-card" key={e.id} onClick={() => onOpenExercise(e)}>
-              <div className={'movement-art art-' + e.id}>
-                <span className="big-number">
-                  {String(exercises.indexOf(e) + 1).padStart(2, '0')}
-                </span>
+        {shown.map((e) => (
+          <button className="movement-card" key={e.id} onClick={() => onOpenExercise(e)}>
+            <div className={'movement-art' + (e.demo ? '' : ' movement-art-text')}>
+              <span className="big-number">
+                {String(plan.exercises.indexOf(e) + 1).padStart(2, '0')}
+              </span>
+              {e.demo ? (
                 <img
                   className="movement-thumb"
-                  src={`${import.meta.env.BASE_URL}thumbs/${e.id}.jpg`}
+                  src={`${import.meta.env.BASE_URL}thumbs/${e.demo}.jpg`}
                   alt=""
                   loading="lazy"
                   width={720}
                   height={362}
                 />
-                <span className="play-orb">
-                  <Play size={19} />
+              ) : (
+                <span className="movement-glyph-text" aria-hidden="true">
+                  {e.name}
                 </span>
-                <span className="art-tag">INTERACTIVE 3D</span>
-              </div>
-              <div className="movement-card-copy">
-                <span className="eyebrow">{e.group}</span>
-                <h3>{e.name}</h3>
-                <p>{e.cue}</p>
-                <span>
-                  {e.equipment}
-                  <ChevronRight size={15} />
-                </span>
-              </div>
-            </button>
-          ))}
+              )}
+              <span className="play-orb">
+                {e.demo ? <Play size={19} /> : <BookOpen size={18} />}
+              </span>
+              <span className="art-tag">{e.demo ? 'INTERACTIVE 3D' : 'STEP-BY-STEP GUIDE'}</span>
+            </div>
+            <div className="movement-card-copy">
+              <span className="eyebrow">{e.group}</span>
+              <h3>{e.name}</h3>
+              <p>{e.cue}</p>
+              <span>
+                {e.equipment}
+                <ChevronRight size={15} />
+              </span>
+            </div>
+          </button>
+        ))}
       </div>
       <p className="small muted">
         Schematic animations explain movement direction. They are not an assessment of your

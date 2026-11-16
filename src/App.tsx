@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+// Only first-time visitors and people redoing setup need the wizard.
+const SetupWizard = lazy(() => import('./components/setup/SetupWizard'));
 import {
   Activity,
   Check,
@@ -13,17 +15,18 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react';
+import { today, initialState, type State, type Session } from './lib/training';
 import {
-  exercises,
-  workouts,
-  today,
-  weekAt,
-  setCount,
-  initialState,
-  type State,
-  type Session,
-  type Exercise,
-} from './lib/training';
+  classicPlan,
+  planWeek as weekOfPlan,
+  setsFor,
+  workoutById,
+  workoutExercises,
+  type Plan,
+  type PlanExercise,
+  type Profile,
+} from './lib/plan';
+
 import { LogoMark } from './components/Logo';
 import { createSampleState } from './lib/sample';
 import { loadState, parseState, saveState } from './lib/storage';
@@ -44,19 +47,22 @@ const tabs = [
   { id: 'moves' as Tab, label: 'Movement lab', icon: Activity },
   { id: 'progress' as Tab, label: 'Your progress', icon: TrendingUp },
 ];
+function exerciseRest(plan: Plan | undefined, id: string) {
+  return (plan ?? classicPlan()).exercises.find((e) => e.id === id)?.restSec ?? 90;
+}
 export default function App() {
   const [data, setData] = useState<State | null>(null),
     [tab, setTab] = useState<Tab>('today'),
     [error, setError] = useState('');
   // Latest state, read by handlers that may fire before React re-renders.
   const snapshot = useRef<State | null>(null);
-  const [modal, setModal] = useState<Exercise | null>(null),
+  const [modal, setModal] = useState<PlanExercise | null>(null),
     [showSettings, setShowSettings] = useState(false),
-    [ready, setReady] = useState<'A' | 'B' | null>(null),
+    [ready, setReady] = useState<string | null>(null),
     [trainingWeek, setTrainingWeek] = useState(1),
     [sleep, setSleep] = useState(8),
     [back, setBack] = useState(0),
-    [warm, setWarm] = useState<boolean[]>(Array(5).fill(false));
+    [warm, setWarm] = useState<boolean[]>([]);
   const [finish, setFinish] = useState(false),
     [after, setAfter] = useState(0),
     [energy, setEnergy] = useState(3),
@@ -73,12 +79,13 @@ export default function App() {
     [nameInput, setNameInput] = useState(''),
     [deleteId, setDeleteId] = useState<string | null>(null),
     [discard, setDiscard] = useState(false),
-    [confirmReset, setConfirmReset] = useState(false);
+    [confirmReset, setConfirmReset] = useState(false),
+    [setupOpen, setSetupOpen] = useState(false);
   useEffect(() => {
     const { state, error } = loadState();
     snapshot.current = state;
     setData(state);
-    setPlanWeek(weekAt(state.startDate, today()));
+    setPlanWeek(weekOfPlan(state.plan ?? classicPlan(), state.startDate, today()));
     setStartInput(state.startDate);
     setNameInput(state.name ?? '');
     if (error) setError(error);
@@ -101,14 +108,19 @@ export default function App() {
   /** Swap in a whole new log (import, sample data or reset) and sync dependent form state. */
   function replaceState(next: State) {
     save(next);
-    setPlanWeek(weekAt(next.startDate, today()));
+    setPlanWeek(weekOfPlan(next.plan ?? classicPlan(), next.startDate, today()));
     setStartInput(next.startDate);
     setNameInput(next.name ?? '');
     setRestEnd(0);
     setError('');
   }
   function loadSample() {
-    replaceState({ ...createSampleState(today()), name: snapshot.current?.name });
+    const current = snapshot.current;
+    replaceState({
+      ...createSampleState(today(), current?.plan ?? classicPlan()),
+      name: current?.name,
+      profile: current?.profile,
+    });
     setToast('Sample log loaded. Reset it any time in Settings.');
   }
   async function importBackup(file: File) {
@@ -125,24 +137,46 @@ export default function App() {
       );
     }
   }
+  /** Adopt a new plan from setup. The programme restarts today; logged history is kept. */
+  function adoptPlan(profile: Profile | undefined, plan: Plan) {
+    const current = snapshot.current ?? initialState();
+    replaceState({
+      ...current,
+      profile: profile ?? current.profile,
+      plan,
+      name: current.name ?? profile?.name,
+      startDate: today(),
+      draft: null,
+    });
+    setSetupOpen(false);
+    setTab('today');
+    setToast(
+      plan.source === 'classic' ? 'Keeping your current programme' : 'Your new plan is ready',
+    );
+  }
   const d = data;
   const day = today();
-  const week = d ? weekAt(d.startDate, day) : 1;
+  const plan = d?.plan ?? classicPlan();
+  const week = d ? weekOfPlan(plan, d.startDate, day) : 1;
   const draft = d?.draft;
   const rest = Math.max(0, Math.ceil((restEnd - now) / 1000));
   useEffect(() => {
-    if (ready && data) setTrainingWeek(weekAt(data.startDate, today()));
+    if (ready && data) {
+      setTrainingWeek(weekOfPlan(data.plan ?? classicPlan(), data.startDate, today()));
+      setWarm(Array((data.plan ?? classicPlan()).warmup.length).fill(false));
+    }
   }, [ready]);
   function begin() {
     if (!d || !ready || back > 0) return;
     const w = trainingWeek;
+    const workout = workoutById(plan, ready);
+    if (!workout) return;
     const sets: Session['sets'] = {};
-    workouts[ready].forEach((id, i) => {
-      const ex = exercises.find((e) => e.id === id)!;
-      const prev = [...d.sessions].reverse().find((s) => s.sets[id]);
-      sets[id] = Array.from({ length: setCount(w, i) }, () => ({
-        kg: ex.weighted ? prev?.sets[id][0]?.kg || 0 : 0,
-        reps: ex.range[0],
+    workoutExercises(plan, workout).forEach((ex) => {
+      const prev = [...d.sessions].reverse().find((s) => s.sets[ex.id]?.length);
+      sets[ex.id] = Array.from({ length: setsFor(plan, w, ex) }, () => ({
+        kg: ex.weighted ? prev?.sets[ex.id][0]?.kg || ex.startKg || 0 : 0,
+        reps: ex.reps[0],
         done: false,
       }));
     });
@@ -161,7 +195,6 @@ export default function App() {
     });
     setReady(null);
     setTab('today');
-    setWarm(Array(5).fill(false));
   }
   function updateSet(
     id: string,
@@ -177,7 +210,10 @@ export default function App() {
       [id]: s.sets[id].map((x, i) => (i === index ? { ...x, [field]: value } : x)),
     };
     save({ ...state, draft: { ...s, sets } });
-    if (field === 'done' && value) setRestEnd(Date.now() + 90000);
+    if (field === 'done' && value) {
+      const rest = exerciseRest(snapshot.current.plan, id);
+      setRestEnd(Date.now() + rest * 1000);
+    }
   }
   useEffect(() => {
     const open = !!(modal || ready || finish || showSettings || deleteId || discard);
@@ -210,7 +246,8 @@ export default function App() {
     setToast('Session saved. A little stronger today.');
     setTab('progress');
   }
-  function startWorkout(type: 'A' | 'B') {
+  function startWorkout(type: string) {
+    setWarm(Array((snapshot.current?.plan ?? classicPlan()).warmup.length).fill(false));
     setReady(type);
     setBack(0);
   }
@@ -220,6 +257,24 @@ export default function App() {
         <LogoMark size={52} />
         <p>Getting your training ready…</p>
       </div>
+    );
+  if (!d.plan || setupOpen)
+    return (
+      <Suspense
+        fallback={
+          <div className="loading">
+            <LogoMark size={52} />
+          </div>
+        }
+      >
+        <SetupWizard
+          initialProfile={d.profile}
+          hasExistingLog={!d.plan && d.sessions.length > 0}
+          onComplete={(profile, next) => adoptPlan(profile, next)}
+          onKeepClassic={() => adoptPlan(undefined, classicPlan())}
+          onCancel={d.plan ? () => setSetupOpen(false) : undefined}
+        />
+      </Suspense>
     );
   const doneSets = draft
       ? Object.values(draft.sets)
@@ -300,6 +355,7 @@ export default function App() {
           )}
           {tab === 'today' && (
             <TodayTab
+              plan={plan}
               data={d}
               save={save}
               day={day}
@@ -330,6 +386,7 @@ export default function App() {
           )}
           {tab === 'plan' && (
             <PlanTab
+              plan={plan}
               data={d}
               draft={draft}
               planWeek={planWeek}
@@ -340,17 +397,23 @@ export default function App() {
             />
           )}
           {tab === 'moves' && (
-            <MovesTab filter={filter} onFilterChange={setFilter} onOpenExercise={setModal} />
+            <MovesTab
+              plan={plan}
+              filter={filter}
+              onFilterChange={setFilter}
+              onOpenExercise={setModal}
+            />
           )}
           {tab === 'progress' && (
             <ProgressTab
+              plan={plan}
               data={d}
               save={save}
               selectedProgress={selectedProgress}
               onSelectedProgressChange={setSelectedProgress}
               expanded={expanded}
               onExpandedChange={setExpanded}
-              onExportCsv={() => exportCsv(d.sessions)}
+              onExportCsv={() => exportCsv(d.sessions, plan)}
               onGoToday={() => setTab('today')}
               onLoadSample={loadSample}
               onRequestDelete={setDeleteId}
@@ -413,6 +476,7 @@ export default function App() {
       {modal && <ExerciseModal exercise={modal} onClose={() => setModal(null)} />}
       {ready && (
         <ReadyModal
+          plan={plan}
           type={ready}
           sessions={d.sessions}
           day={day}
@@ -431,6 +495,7 @@ export default function App() {
       )}
       {finish && (
         <FinishModal
+          checkInLabel={plan.checkInLabel}
           doneSets={doneSets}
           totalSets={totalSets}
           after={after}
@@ -445,6 +510,11 @@ export default function App() {
       )}
       {showSettings && (
         <SettingsModal
+          plan={plan}
+          onRedoSetup={() => {
+            setShowSettings(false);
+            setSetupOpen(true);
+          }}
           onLoadSample={() => {
             loadSample();
             setShowSettings(false);
@@ -459,7 +529,7 @@ export default function App() {
           onNameInputChange={setNameInput}
           onSaveStartDate={() => {
             save({ ...d, startDate: startInput });
-            setPlanWeek(weekAt(startInput, day));
+            setPlanWeek(weekOfPlan(plan, startInput, day));
             setToast('Programme start updated');
           }}
           onImport={importBackup}
@@ -493,7 +563,7 @@ export default function App() {
           confirmLabel="Reset"
           onCancel={() => setConfirmReset(false)}
           onConfirm={() => {
-            replaceState({ ...initialState(), name: d.name });
+            replaceState({ ...initialState(), name: d.name, profile: d.profile, plan: d.plan });
             setConfirmReset(false);
             setShowSettings(false);
             setTab('today');

@@ -1,12 +1,13 @@
-import { Check, ChevronRight, Play } from 'lucide-react';
+import { BookOpen, Check, ChevronRight, Play } from 'lucide-react';
+import type { Session } from '../lib/training';
 import {
-  exercises,
-  workouts,
-  setCount,
   MAX_KG,
-  type Exercise,
-  type Session,
-} from '../lib/training';
+  setsFor,
+  workoutById,
+  workoutExercises,
+  type Plan,
+  type PlanExercise,
+} from '../lib/plan';
 
 export type UpdateSet = (
   id: string,
@@ -16,15 +17,17 @@ export type UpdateSet = (
 ) => void;
 
 type Props = {
-  type: 'A' | 'B';
+  plan: Plan;
+  type: string;
   training?: boolean;
   draft: Session | null | undefined;
   planWeek: number;
-  onOpenExercise: (exercise: Exercise) => void;
+  onOpenExercise: (exercise: PlanExercise) => void;
   onUpdateSet: UpdateSet;
 };
 
 export default function ExerciseList({
+  plan,
   type,
   training = false,
   draft,
@@ -32,12 +35,15 @@ export default function ExerciseList({
   onOpenExercise,
   onUpdateSet,
 }: Props) {
+  const workout = workoutById(plan, type) ?? plan.workouts[0];
   return (
     <div className="exercise-list">
-      {workouts[type].map((id, i) => {
-        const ex = exercises.find((e) => e.id === id)!;
-        const count = training && draft ? draft.sets[id].length : setCount(planWeek, i);
-        const done = training && draft?.sets[id].every((x) => x.done);
+      {workoutExercises(plan, workout).map((ex, i) => {
+        const id = ex.id;
+        const logged = training && draft ? draft.sets[id] : undefined;
+        if (training && !logged) return null;
+        const count = logged ? logged.length : setsFor(plan, planWeek, ex);
+        const done = logged?.every((x) => x.done);
         return (
           <div className={'exercise-row ' + (done ? 'completed' : '')} key={id}>
             <button className="exercise-top" onClick={() => onOpenExercise(ex)}>
@@ -47,24 +53,33 @@ export default function ExerciseList({
               <div className="exercise-name">
                 <strong>{ex.name}</strong>
                 <span>
-                  {ex.group} <b>·</b> {count} {count === 1 ? 'set' : 'sets'} × {ex.range.join('–')}{' '}
-                  {ex.side ? 'each side' : ''}
+                  {ex.group} <b>·</b> {count} {count === 1 ? 'set' : 'sets'} ×{' '}
+                  {ex.reps[0] === ex.reps[1] ? ex.reps[0] : ex.reps.join('–')}{' '}
+                  {ex.perSide ? 'each side' : ''}
                 </span>
               </div>
               <span className="demo-badge">
-                <Play size={12} /> 3D
+                {ex.demo ? (
+                  <>
+                    <Play size={12} /> 3D
+                  </>
+                ) : (
+                  <>
+                    <BookOpen size={12} /> Guide
+                  </>
+                )}
               </span>
               <ChevronRight size={18} />
             </button>
-            {training && draft && (
+            {logged && (
               <div className="set-log">
                 <div className="set-labels">
                   <span>SET</span>
-                  <span>{ex.weighted ? 'KG / DUMBBELL' : 'BODY WEIGHT'}</span>
-                  <span>REPS {ex.side ? '/ SIDE' : ''}</span>
+                  <span>{ex.weighted ? 'KG' : 'BODY WEIGHT'}</span>
+                  <span>REPS {ex.perSide ? '/ SIDE' : ''}</span>
                   <span>LOG</span>
                 </div>
-                {draft.sets[id].map((s, j) => (
+                {logged.map((s, j) => (
                   <div className="set-line" key={j}>
                     <span>{j + 1}</span>
                     {ex.weighted ? (

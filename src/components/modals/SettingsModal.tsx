@@ -1,8 +1,25 @@
-import { Download, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { useState } from 'react';
+import { Download, KeyRound, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { weekday, type State } from '../../lib/training';
+import type { Plan } from '../../lib/plan';
 import { downloadBackup, exportCsv } from '../../lib/export';
+import { getApiKey, setApiKey } from '../../lib/api-key';
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const SOURCE_LABEL: Record<Plan['source'], string> = {
+  ai: 'Planned with Claude',
+  builtin: 'Built-in planner',
+  classic: 'Classic programme',
+};
+
+function listDays(days: number[]) {
+  const names = [...days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => DAY_NAMES[d]);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0];
+}
 
 type Props = {
+  plan: Plan;
+  onRedoSetup: () => void;
   data: State;
   save: (state: State) => void;
   startInput: string;
@@ -17,6 +34,8 @@ type Props = {
 };
 
 export default function SettingsModal({
+  plan,
+  onRedoSetup,
   data: d,
   save,
   startInput,
@@ -29,6 +48,7 @@ export default function SettingsModal({
   onLoadSample,
   onReset,
 }: Props) {
+  const [hasKey, setHasKey] = useState(() => !!getApiKey());
   return (
     <div className="modal-overlay">
       <section
@@ -44,6 +64,18 @@ export default function SettingsModal({
           </div>
           <button className="icon-button" aria-label="Close settings" onClick={onClose}>
             <X />
+          </button>
+        </div>
+        <div className="plan-settings">
+          <div>
+            <span className="eyebrow">{SOURCE_LABEL[plan.source]}</span>
+            <strong>{plan.title}</strong>
+            <span className="small muted">
+              {plan.weeks} weeks · {plan.days.length}× per week · {plan.minutes} min
+            </span>
+          </div>
+          <button className="secondary" onClick={onRedoSetup}>
+            <RefreshCw size={16} /> Redo setup
           </button>
         </div>
         <label>
@@ -84,11 +116,12 @@ export default function SettingsModal({
         </label>
         <h3>Your training guidelines</h3>
         <ul className="guidelines">
-          <li>Monday, Wednesday and Friday strength. Walk on the days between.</li>
+          <li>
+            Strength on {listDays(plan.days)}. Walking or gentle movement on the days between.
+          </li>
           <li>Train at a time that still lets you protect 7–9 hours of sleep.</li>
           <li>
-            Start with the lowest practical dumbbell setting. Logged weights are per dumbbell, not
-            the combined pair.
+            Start light. Log the weight of one dumbbell or kettlebell, or the total on a barbell.
           </li>
           <li>
             Check dumbbell selectors and bench locks before every set. Keep children and pets clear
@@ -109,27 +142,22 @@ export default function SettingsModal({
         </ul>
         <div className="sources">
           <a
-            href="https://www.healthdirect.gov.au/symptoms/aches-and-pains/back-pain"
+            href="https://www.who.int/publications/i/item/9789240015128"
             target="_blank"
             rel="noreferrer"
           >
-            Back pain guidance ↗
-          </a>
-          <a
-            href="https://www.health.gov.au/topics/physical-activity/24-hour-movement-guidelines-for-all-australians/recommendations-for-adults-18-to-64-years"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Australian activity guidance ↗
+            WHO physical activity guidelines ↗
           </a>
         </div>
         <h3>Your data</h3>
         <p>
-          Your log is stored only in this browser. Nothing is sent to a server. Export a backup
-          regularly, and import it to move your log to another device or browser.
+          Your log is stored only in this browser, and this app has no server. The one exception is
+          an AI plan: when you choose “Plan with Claude”, your setup answers and any photos you
+          added are sent from your browser directly to Anthropic with your API key. Photos are never
+          saved. Export a backup regularly, and import it to move your log to another device.
         </p>
         <div className="two-fields">
-          <button className="secondary" onClick={() => exportCsv(d.sessions)}>
+          <button className="secondary" onClick={() => exportCsv(d.sessions, plan)}>
             <Download size={16} /> Workout CSV
           </button>
           <button className="secondary" onClick={() => downloadBackup(d)}>
@@ -157,6 +185,17 @@ export default function SettingsModal({
             <Trash2 size={16} /> Reset all data
           </button>
         </div>
+        {hasKey && (
+          <button
+            className="secondary wide"
+            onClick={() => {
+              setApiKey(null);
+              setHasKey(false);
+            }}
+          >
+            <KeyRound size={16} /> Forget my saved API key
+          </button>
+        )}
         <p className="small muted">
           Importing or loading sample data replaces the log in this browser. On iPhone, open the
           site in Safari, then use Share → Add to Home Screen.

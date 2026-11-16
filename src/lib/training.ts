@@ -1,3 +1,5 @@
+import type { Plan, Profile } from './plan';
+
 export type Exercise = {
   id: string;
   name: string;
@@ -165,13 +167,12 @@ export const workouts = {
   A: ['squat', 'press', 'row', 'bridge', 'heel', 'calf'],
   B: ['split', 'pushup', 'row', 'bridge', 'bird', 'curl'],
 };
-/** Upper bound for a logged weight, in kg per dumbbell. */
-export const MAX_KG = 50;
 export type SetLog = { kg: number; reps: number; done: boolean };
 export type Session = {
   id: string;
   date: string;
-  type: 'A' | 'B';
+  /** Id of the plan workout this session followed. */
+  type: string;
   week: number;
   startedAt: number;
   finishedAt?: number;
@@ -190,6 +191,10 @@ export type State = {
   walks: { id: string; date: string; minutes: number }[];
   /** Optional display name shown on the profile card. */
   name?: string;
+  /** Answers from the setup wizard. */
+  profile?: Profile;
+  /** The active training plan. Absent until setup is finished. */
+  plan?: Plan;
 };
 /** Today's date in the device's local time zone, formatted as YYYY-MM-DD. */
 export function today() {
@@ -210,22 +215,6 @@ export function weekday(s: string) {
 export function nextMonday(s: string) {
   const d = weekday(s);
   return addDays(s, d === 1 ? 0 : (8 - d) % 7);
-}
-export function weekAt(start: string, date: string) {
-  return Math.max(
-    1,
-    Math.min(8, Math.floor((Date.parse(date) - Date.parse(start)) / 604800000) + 1),
-  );
-}
-export function schedule(start: string, date: string): 'A' | 'B' | null {
-  if (date < start || date >= addDays(start, 56)) return null;
-  const day = weekday(date);
-  if (![1, 3, 5].includes(day)) return null;
-  const w = weekAt(start, date);
-  return ((w - 1) * 3 + [1, 3, 5].indexOf(day)) % 2 === 0 ? 'A' : 'B';
-}
-export function setCount(week: number, index: number) {
-  return week === 1 ? 1 : week >= 5 && index < 3 ? 3 : 2;
 }
 export function labelDate(s: string) {
   return new Date(s + 'T12:00:00Z').toLocaleDateString(undefined, {

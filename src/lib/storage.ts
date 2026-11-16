@@ -1,5 +1,6 @@
-import { z } from 'zod';
-import { initialState, MAX_KG, type State } from './training';
+import * as z from 'zod/v4';
+import { MAX_KG, planSchema, profileSchema } from './plan';
+import { initialState, type State } from './training';
 
 /** localStorage key holding the full training log. */
 export const STORAGE_KEY = 'hermes-workout:state';
@@ -13,8 +14,8 @@ const setLog = z.object({
 const session = z.object({
   id: z.string().max(100),
   date: z.string().max(30),
-  type: z.enum(['A', 'B']),
-  week: num.int().min(1).max(8),
+  type: z.string().min(1).max(12),
+  week: num.int().min(1).max(16),
   startedAt: num,
   finishedAt: num.optional(),
   sleep: num.min(0).max(24),
@@ -23,7 +24,7 @@ const session = z.object({
   backNext: num.min(0).max(10).optional(),
   energy: num.min(1).max(5).optional(),
   notes: z.string().max(2000).optional(),
-  sets: z.record(z.string(), z.array(setLog).max(3)),
+  sets: z.record(z.string(), z.array(setLog).max(6)),
 });
 export const stateSchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -35,6 +36,8 @@ export const stateSchema = z.object({
     )
     .max(10000),
   name: z.string().max(60).optional(),
+  profile: profileSchema.optional(),
+  plan: planSchema.optional(),
 });
 
 /** Parse and validate an unknown value as a training log. Throws a readable error on failure. */

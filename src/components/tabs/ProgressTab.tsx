@@ -9,9 +9,11 @@ import {
   Sparkles,
   TrendingUp,
 } from 'lucide-react';
-import { exercises, labelDate, type Session, type State } from '../../lib/training';
+import { labelDate, type Session, type State } from '../../lib/training';
+import { exerciseName, type Plan } from '../../lib/plan';
 
 type Props = {
+  plan: Plan;
   data: State;
   save: (state: State) => void;
   selectedProgress: string;
@@ -25,6 +27,7 @@ type Props = {
 };
 
 export default function ProgressTab({
+  plan,
   data: d,
   save,
   selectedProgress,
@@ -36,11 +39,21 @@ export default function ProgressTab({
   onLoadSample,
   onRequestDelete,
 }: Props) {
+  // Weighted exercises from the current plan, plus anything weighted logged under earlier plans.
+  const loggedWeighted = new Set(
+    d.sessions.flatMap((s) =>
+      Object.entries(s.sets)
+        .filter(([, sets]) => sets.some((x) => x.done && x.kg > 0))
+        .map(([id]) => id),
+    ),
+  );
+  const options = [
+    ...new Set([...plan.exercises.filter((e) => e.weighted).map((e) => e.id), ...loggedWeighted]),
+  ];
+  const selected = options.includes(selectedProgress) ? selectedProgress : (options[0] ?? '');
   const bestKg = (s: Session) =>
-    Math.max(0, ...s.sets[selectedProgress].filter((x) => x.done).map((x) => x.kg));
-  const chartSessions = d.sessions
-    .filter((s) => s.sets[selectedProgress]?.some((x) => x.done))
-    .slice(-10);
+    Math.max(0, ...s.sets[selected].filter((x) => x.done).map((x) => x.kg));
+  const chartSessions = d.sessions.filter((s) => s.sets[selected]?.some((x) => x.done)).slice(-10);
   // Scale bars to the heaviest logged set so any dumbbell range fits the chart.
   const chartMax = Math.max(1, ...chartSessions.map(bestKg));
   return (
@@ -101,20 +114,18 @@ export default function ProgressTab({
             <h3>Heaviest completed set</h3>
           </div>
           <select
-            value={selectedProgress}
+            value={selected}
             aria-label="Progress exercise"
             onChange={(e) => onSelectedProgressChange(e.target.value)}
           >
-            {exercises
-              .filter((e) => e.weighted)
-              .map((e) => (
-                <option value={e.id} key={e.id}>
-                  {e.name}
-                </option>
-              ))}
+            {options.map((id) => (
+              <option value={id} key={id}>
+                {exerciseName(plan, id)}
+              </option>
+            ))}
           </select>
         </div>
-        {d.sessions.some((s) => s.sets[selectedProgress]?.some((x) => x.done)) ? (
+        {d.sessions.some((s) => s.sets[selected]?.some((x) => x.done)) ? (
           <div className="chart-bars">
             {chartSessions.map((s) => {
               const kg = bestKg(s);
@@ -168,7 +179,9 @@ export default function ProgressTab({
               >
                 <span className="workout-letter">{s.type}</span>
                 <div>
-                  <strong>Workout {s.type}</strong>
+                  <strong>
+                    {plan.workouts.find((w) => w.id === s.type)?.name ?? `Workout ${s.type}`}
+                  </strong>
                   <span>
                     {labelDate(s.date)} · Week {s.week} ·{' '}
                     {
@@ -185,12 +198,12 @@ export default function ProgressTab({
               {expanded === s.id && (
                 <div className="history-detail">
                   <p>
-                    Sleep {s.sleep}h · Back before {s.backBefore}/10 · After {s.backAfter ?? '–'}
-                    /10 · Next morning {s.backNext ?? 'not logged'}
+                    Sleep {s.sleep}h · Discomfort before {s.backBefore}/10 · After{' '}
+                    {s.backAfter ?? '–'}/10 · Next morning {s.backNext ?? 'not logged'}
                   </p>
                   {Object.entries(s.sets).map(([id, sets]) => (
                     <p key={id}>
-                      <strong>{exercises.find((e) => e.id === id)?.name}</strong>
+                      <strong>{exerciseName(plan, id)}</strong>
                       <span>
                         {sets
                           .filter((x) => x.done)
@@ -201,7 +214,7 @@ export default function ProgressTab({
                   ))}
                   {s.notes && <p>{s.notes}</p>}
                   <label>
-                    Next morning back score
+                    Next morning discomfort score
                     <select
                       value={s.backNext ?? ''}
                       onChange={(e) =>

@@ -21,7 +21,8 @@ pnpm build
 
 ## Guidelines
 
-- **Keep it local-first.** The app must work fully offline with no account or server. Don't add analytics, trackers or third-party network requests.
+- **Keep it local-first.** The app must work fully offline with no account or server. Don't add analytics, trackers or third-party network requests. The only exception is the user-initiated "Plan with Claude" request, which goes directly from the browser to Anthropic with the user's own key.
+- **Keep the built-in planner working.** AI planning is optional; every feature must work with a plan from `src/lib/builtin-planner.ts`.
 - **Don't break saved data.** Logs live in users' browsers. If you change the shape of `State` in `src/lib/training.ts`, keep old data loading (make new fields optional or migrate them in `src/lib/storage.ts`) and add a test.
 - **Exercise content is safety-sensitive.** Changes to cues, steps or progression rules should stay conservative and beginner-friendly. Explain your reasoning in the PR.
 - **Test the 3D studio** in both WebGL and the CPU fallback when touching `MovementDemo`, `trainer-rig` or `software-scene`. Rig changes should keep `tests/trainer-rig.test.ts` passing.

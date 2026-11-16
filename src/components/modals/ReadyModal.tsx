@@ -1,16 +1,13 @@
 import { ArrowRight, X } from 'lucide-react';
-import type { Session } from '../../lib/training';
+import { addDays, type Session } from '../../lib/training';
+import { workoutById, type Plan } from '../../lib/plan';
 
-const warmup = [
-  'Walk or march gently for 3 minutes',
-  '8 comfortable sit-to-stands',
-  '8 gentle wall push-ups',
-  '10 supported calf raises',
-  'Practise your first exercise with no weight',
-];
+/** Discomfort score at which the app suggests a walk instead of strength work. */
+export const STOP_SCORE = 4;
 
 type Props = {
-  type: 'A' | 'B';
+  plan: Plan;
+  type: string;
   sessions: Session[];
   day: string;
   week: number;
@@ -27,6 +24,7 @@ type Props = {
 };
 
 export default function ReadyModal({
+  plan,
   type,
   sessions,
   day,
@@ -42,6 +40,13 @@ export default function ReadyModal({
   onBegin,
   onClose,
 }: Props) {
+  const warmup = plan.warmup;
+  const label = plan.checkInLabel;
+  const backToBack = plan.days.some((d) => plan.days.includes((d + 1) % 7));
+  const trainedRecently = sessions.some(
+    (s) => s.date <= day && s.date >= addDays(day, -1) && s.date !== day,
+  );
+  const workout = workoutById(plan, type);
   return (
     <div className="modal-overlay">
       <section
@@ -52,7 +57,7 @@ export default function ReadyModal({
       >
         <div className="modal-heading">
           <div>
-            <span className="eyebrow">WORKOUT {type}</span>
+            <span className="eyebrow">{(workout?.name ?? `Workout ${type}`).toUpperCase()}</span>
             <h2>Start with a check-in.</h2>
           </div>
           <button className="icon-button" aria-label="Close check-in" onClick={onClose}>
@@ -60,10 +65,10 @@ export default function ReadyModal({
           </button>
         </div>
         <p>Protect your sleep. Move comfortably. Today is about showing up.</p>
-        {sessions.some((s) => Date.parse(day) - Date.parse(s.date) < 172800000) && (
+        {trainedRecently && !backToBack && (
           <div className="notice">
-            You trained within the last two days. Keep a full rest day between strength sessions. A
-            walk is a good choice today.
+            You trained yesterday. Your plan keeps a rest day between strength sessions, so a walk
+            is a good choice today.
           </div>
         )}
         <div className="two-fields">
@@ -79,7 +84,7 @@ export default function ReadyModal({
             />
           </label>
           <label>
-            Back pain now · 0–10
+            {label} now · 0–10 discomfort
             <select value={back} onChange={(e) => onBackChange(Number(e.target.value))}>
               {Array.from({ length: 11 }, (_, i) => (
                 <option key={i} value={i}>
@@ -96,11 +101,18 @@ export default function ReadyModal({
             training.
           </div>
         )}
-        {back > 0 && (
+        {back >= STOP_SCORE ? (
           <div className="notice">
-            Choose comfortable walking today and get advice if symptoms persist or recur. This
-            starting plan is for days without back pain.
+            That is more discomfort than this plan is designed for. Choose comfortable walking today
+            and get advice if it persists or keeps coming back.
           </div>
+        ) : (
+          back > 0 && (
+            <div className="notice">
+              Keep today easy: use lighter weights, a smaller range, and stop any movement that
+              makes it worse.
+            </div>
+          )
         )}
         <label className="session-week">
           Training level for this session
@@ -111,7 +123,7 @@ export default function ReadyModal({
             {Array.from({ length: week }, (_, i) => (
               <option key={i} value={i + 1}>
                 Week {i + 1}
-                {i === 0 ? ' · 1 set' : i < 4 ? ' · 2 sets' : ' · up to 3 sets'}
+                {i === 0 ? ' · lightest' : i + 1 === week ? ' · this week' : ''}
               </option>
             ))}
           </select>
@@ -119,30 +131,34 @@ export default function ReadyModal({
             Repeat an easier week whenever you need to. Progress only when recovery is comfortable.
           </span>
         </label>
-        <div className="warmup">
-          <h3>Your 7-minute warm-up</h3>
-          {warmup.map((s, i) => (
-            <label key={s}>
-              <input
-                type="checkbox"
-                checked={warm[i]}
-                onChange={(e) => onWarmChange(warm.map((v, j) => (j === i ? e.target.checked : v)))}
-              />
-              <span>{s}</span>
-            </label>
-          ))}
-        </div>
+        {warmup.length > 0 && (
+          <div className="warmup">
+            <h3>Your warm-up</h3>
+            {warmup.map((s, i) => (
+              <label key={s}>
+                <input
+                  type="checkbox"
+                  checked={!!warm[i]}
+                  onChange={(e) =>
+                    onWarmChange(warm.map((v, j) => (j === i ? e.target.checked : v)))
+                  }
+                />
+                <span>{s}</span>
+              </label>
+            ))}
+          </div>
+        )}
         <button
           className="primary wide"
-          disabled={back > 0 || !warm.every(Boolean)}
+          disabled={back >= STOP_SCORE || !warm.every(Boolean)}
           onClick={onBegin}
         >
-          Warm-up done. Let’s begin. <ArrowRight size={18} />
+          {warmup.length ? 'Warm-up done. Let’s begin.' : 'Let’s begin.'} <ArrowRight size={18} />
         </button>
         <p className="small muted">
           {trainingWeek === 1
             ? 'Start with one light set. Keep 3–4 good repetitions in reserve.'
-            : 'Keep 2–3 good repetitions in reserve. Rest 90 seconds between sets.'}
+            : 'Keep 2–3 good repetitions in reserve. The rest timer starts after each set.'}
         </p>
       </section>
     </div>

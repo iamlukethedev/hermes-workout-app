@@ -1,18 +1,28 @@
-import { ArrowRight, TrendingUp } from 'lucide-react';
-import { addDays, labelDate, type Exercise, type Session, type State } from '../../lib/training';
+import { ArrowRight, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react';
+import { addDays, labelDate, weekday, type Session, type State } from '../../lib/training';
+import { workoutOn, type Plan, type PlanExercise } from '../../lib/plan';
 import ExerciseList, { type UpdateSet } from '../ExerciseList';
 
 type Props = {
+  plan: Plan;
   data: State;
   draft: Session | null | undefined;
   planWeek: number;
   onPlanWeekChange: (week: number) => void;
-  onStartWorkout: (type: 'A' | 'B') => void;
-  onOpenExercise: (exercise: Exercise) => void;
+  onStartWorkout: (type: string) => void;
+  onOpenExercise: (exercise: PlanExercise) => void;
   onUpdateSet: UpdateSet;
 };
 
+const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const SOURCE_LABEL: Record<Plan['source'], string> = {
+  ai: 'Planned with Claude',
+  builtin: 'Built-in plan',
+  classic: 'Classic programme',
+};
+
 export default function PlanTab({
+  plan,
   data: d,
   draft,
   planWeek,
@@ -21,17 +31,25 @@ export default function PlanTab({
   onOpenExercise,
   onUpdateSet,
 }: Props) {
+  const weekStart = addDays(d.startDate, (planWeek - 1) * 7);
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+    .map((date) => ({ date, workout: workoutOn(plan, d.startDate, date) }))
+    .filter((x): x is { date: string; workout: string } => !!x.workout);
+  const half = Math.ceil(plan.weeks / 2);
   return (
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">YOUR EIGHT WEEK FOUNDATION</div>
-          <h1>Simple. Steady. Stronger.</h1>
-          <p>Three strength sessions. Room to recover. A plan that grows with you.</p>
+          <div className="eyebrow">
+            {SOURCE_LABEL[plan.source].toUpperCase()} · {plan.weeks} WEEKS · {plan.days.length}× PER
+            WEEK
+          </div>
+          <h1>{plan.title}</h1>
+          <p>{plan.summary}</p>
         </div>
       </div>
       <div className="week-picker">
-        {Array.from({ length: 8 }, (_, i) => (
+        {Array.from({ length: plan.weeks }, (_, i) => (
           <button
             className={planWeek === i + 1 ? 'selected' : ''}
             onClick={() => onPlanWeekChange(i + 1)}
@@ -44,48 +62,43 @@ export default function PlanTab({
       </div>
       <section className="plan-summary">
         <div>
-          <span className="eyebrow">
-            {labelDate(addDays(d.startDate, (planWeek - 1) * 7))} ONWARDS
-          </span>
+          <span className="eyebrow">{labelDate(weekStart)} ONWARDS</span>
           <h2>
             {planWeek === 1
               ? 'Learn the movements.'
-              : planWeek < 5
+              : planWeek <= half
                 ? 'Build your foundation.'
                 : 'Grow at your own pace.'}
           </h2>
           <p>
             {planWeek === 1
-              ? 'One light set of each exercise. Finish with 3–4 good repetitions still available.'
-              : planWeek < 5
-                ? 'Two sets per exercise if recovery is comfortable. Add repetitions before weight.'
-                : 'Optionally add a third set to the first three exercises if recovery is good. Keep the other exercises at two sets.'}
+              ? 'Start with the lighter set count and finish every set with 3–4 good repetitions still available.'
+              : planWeek <= half
+                ? 'Add a set where the plan allows it, if recovery is comfortable. Add repetitions before weight.'
+                : 'Work up to the full set count for each exercise if recovery is good.'}
           </p>
         </div>
         <div className="plan-days">
-          <span>
-            MON <b>{planWeek % 2 ? 'A' : 'B'}</b>
-          </span>
-          <span>
-            WED <b>{planWeek % 2 ? 'B' : 'A'}</b>
-          </span>
-          <span>
-            FRI <b>{planWeek % 2 ? 'A' : 'B'}</b>
-          </span>
+          {weekDays.map(({ date, workout }) => (
+            <span key={date}>
+              {DAY_NAMES[weekday(date)]} <b>{workout}</b>
+            </span>
+          ))}
         </div>
       </section>
       <div className="two-columns">
-        {(['A', 'B'] as const).map((type) => (
-          <section className="card workout-plan" key={type}>
+        {plan.workouts.map((workout) => (
+          <section className="card workout-plan" key={workout.id}>
             <div className="section-heading">
               <div>
-                <span className="eyebrow">FULL BODY</span>
-                <h2>Workout {type}</h2>
+                <span className="eyebrow">{workout.focus}</span>
+                <h2>{workout.name}</h2>
               </div>
-              <span className="workout-letter">{type}</span>
+              <span className="workout-letter">{workout.id}</span>
             </div>
             <ExerciseList
-              type={type}
+              plan={plan}
+              type={workout.id}
               draft={draft}
               planWeek={planWeek}
               onOpenExercise={onOpenExercise}
@@ -94,9 +107,9 @@ export default function PlanTab({
             <button
               className="secondary wide"
               disabled={!!draft}
-              onClick={() => onStartWorkout(type)}
+              onClick={() => onStartWorkout(workout.id)}
             >
-              Start workout {type}
+              Start {workout.name}
               <ArrowRight size={17} />
             </button>
           </section>
@@ -106,17 +119,32 @@ export default function PlanTab({
         <TrendingUp />
         <div>
           <h3>Earn the next weight.</h3>
-          <p>
-            Reach the top of your rep range on every set for two sessions, with controlled movement,
-            spare repetitions and no increase in back symptoms during or the next day. Then use the
-            smallest weight increase. Never increase weight and sets in the same session.
-          </p>
+          <p>{plan.progression}</p>
           <p>
             Calendar weeks are a guide, not a deadline. If recovery is difficult, repeat an earlier
-            week. Keep at least one rest day between strength sessions.
+            week.
           </p>
         </div>
       </section>
+      {plan.safety.length > 0 && (
+        <section className="card progression">
+          <ShieldCheck />
+          <div>
+            <h3>Your safety notes</h3>
+            <ul className="guidelines">
+              {plan.safety.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+      {plan.source === 'ai' && (
+        <p className="small muted plan-credit">
+          <Sparkles size={13} /> Generated by Claude from your setup answers. Review it with common
+          sense, and with a professional if you have an injury.
+        </p>
+      )}
     </>
   );
 }

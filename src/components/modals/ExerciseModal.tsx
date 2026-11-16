@@ -1,8 +1,8 @@
-import { Info, X } from 'lucide-react';
-import type { Exercise } from '../../lib/training';
+import { BookOpen, Info, X } from 'lucide-react';
+import type { PlanExercise } from '../../lib/plan';
 import LazyMovementDemo from '../LazyMovementDemo';
 
-type Props = { exercise: Exercise; onClose: () => void };
+type Props = { exercise: PlanExercise; onClose: () => void };
 
 export default function ExerciseModal({ exercise, onClose }: Props) {
   return (
@@ -23,7 +23,35 @@ export default function ExerciseModal({ exercise, onClose }: Props) {
             <X />
           </button>
         </div>
-        <LazyMovementDemo key={exercise.id} exercise={exercise.id} />
+        {exercise.demo ? (
+          <LazyMovementDemo key={exercise.id} exercise={exercise.demo} />
+        ) : (
+          <div className="no-demo">
+            <BookOpen size={28} />
+            <strong>Step-by-step guide</strong>
+            <span>There is no 3D demo for this exercise yet. Follow the steps below.</span>
+          </div>
+        )}
+        <div className="exercise-facts">
+          <span>
+            <b>
+              {exercise.sets.start === exercise.sets.max
+                ? exercise.sets.start
+                : `${exercise.sets.start}–${exercise.sets.max}`}
+            </b>{' '}
+            sets
+          </span>
+          <span>
+            <b>
+              {exercise.reps[0] === exercise.reps[1] ? exercise.reps[0] : exercise.reps.join('–')}
+            </b>{' '}
+            reps{exercise.perSide ? ' each side' : ''}
+          </span>
+          <span>
+            <b>{exercise.restSec}s</b> rest
+          </span>
+          <span>{exercise.equipment}</span>
+        </div>
         <div className="demo-instructions">
           <p className="movement-cue">{exercise.cue}</p>
           <ol>

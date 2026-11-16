@@ -1,4 +1,5 @@
-import { exercises, type Session, type State } from './training';
+import { exerciseName, type Plan } from './plan';
+import type { Session, State } from './training';
 
 export function uid() {
   return typeof crypto.randomUUID === 'function'
@@ -28,7 +29,7 @@ export function downloadBackup(state: State) {
   download('hermes-workout-backup.json', JSON.stringify(state, null, 2));
 }
 
-export function exportCsv(sessions: Session[]) {
+export function exportCsv(sessions: Session[], plan?: Plan) {
   const rows = [
     [
       'Date',
@@ -36,13 +37,13 @@ export function exportCsv(sessions: Session[]) {
       'Week',
       'Exercise',
       'Set',
-      'Kg per dumbbell',
-      'Reps per side if unilateral',
+      'Kg',
+      'Reps (per side if unilateral)',
       'Completed',
       'Sleep hours',
-      'Back before',
-      'Back after',
-      'Back next morning',
+      'Discomfort before',
+      'Discomfort after',
+      'Discomfort next morning',
       'Energy',
     ],
   ];
@@ -53,7 +54,7 @@ export function exportCsv(sessions: Session[]) {
           s.date,
           s.type,
           String(s.week),
-          exercises.find((e) => e.id === id)?.name || id,
+          exerciseName(plan, id),
           String(i + 1),
           String(x.kg),
           String(x.reps),
