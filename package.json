@@ -45,13 +45,13 @@
     "vitest": "^5.1.0"
   },
   "packageManager": "pnpm@10.34.9",
-  "homepage": "https://iamlukethedev.github.io/hermes-workout/",
+  "homepage": "https://iamlukethedev.github.io/hermes-workout-app/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/iamlukethedev/hermes-workout.git"
+    "url": "git+https://github.com/iamlukethedev/hermes-workout-app.git"
   },
   "bugs": {
-    "url": "https://github.com/iamlukethedev/hermes-workout/issues"
+    "url": "https://github.com/iamlukethedev/hermes-workout-app/issues"
   },
   "keywords": [
     "fitness",

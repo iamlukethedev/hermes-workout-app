@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://iamlukethedev.github.io/hermes-workout/"><strong>Live demo</strong></a> ·
+  <a href="https://iamlukethedev.github.io/hermes-workout-app/"><strong>Live demo</strong></a> ·
   <a href="#getting-started">Run locally</a> ·
   <a href="CONTRIBUTING.md">Contribute</a>
 </p>
