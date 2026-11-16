@@ -117,6 +117,38 @@ describe('trainer rig', () => {
     near(wp(model, 'foot_l').distanceTo(foot), 0);
   });
 
+  it('keeps limbs rigid and feet planted while breathing and swaying', async () => {
+    const model = await loadTrainer();
+    const rig = createTrainerRig(model);
+    const links: [string, string, number][] = [];
+    model.traverse((b) => {
+      if ((b as THREE.Bone).isBone && (b.parent as THREE.Bone)?.isBone && b.name !== 'pelvis')
+        links.push([
+          b.name,
+          b.parent!.name,
+          wp(model, b.name).distanceTo(wp(model, b.parent!.name)),
+        ]);
+    });
+    for (const exercise of exercises)
+      for (const life of [
+        { breath: 1, sway: 1 },
+        { breath: -1, sway: -1 },
+      ]) {
+        rig.update(exercise, 0.5, 'right', life);
+        for (const [child, parent, length] of links)
+          near(wp(model, child).distanceTo(wp(model, parent)), length);
+      }
+    rig.update('squat', 0.5, 'right', { breath: 0, sway: 0 });
+    const foot = wp(model, 'foot_l');
+    rig.update('squat', 0.5, 'right', { breath: 1, sway: 1 });
+    near(wp(model, 'foot_l').distanceTo(foot), 0, 1e-4);
+    rig.update('pushup', 1, 'right', { breath: 0, sway: 0 });
+    const hand = wp(model, 'hand_l');
+    rig.update('pushup', 1, 'right', { breath: 1, sway: 1 });
+    // Arms are fully extended at the top, so the chest lift can drag a palm a few millimetres.
+    near(wp(model, 'hand_l').distanceTo(hand), 0, 0.008);
+  });
+
   it('survives a transformed parent and restores the bind pose on dispose', async () => {
     const model = await loadTrainer();
     const parent = new THREE.Group();

@@ -19,10 +19,13 @@ import {
   today,
   weekAt,
   setCount,
+  initialState,
   type State,
   type Session,
   type Exercise,
 } from './lib/training';
+import { LogoMark } from './components/Logo';
+import { createSampleState } from './lib/sample';
 import { loadState, parseState, saveState } from './lib/storage';
 import { downloadBackup, exportCsv, initials, uid } from './lib/export';
 import TodayTab from './components/tabs/TodayTab';
@@ -69,7 +72,8 @@ export default function App() {
   const [startInput, setStartInput] = useState(''),
     [nameInput, setNameInput] = useState(''),
     [deleteId, setDeleteId] = useState<string | null>(null),
-    [discard, setDiscard] = useState(false);
+    [discard, setDiscard] = useState(false),
+    [confirmReset, setConfirmReset] = useState(false);
   useEffect(() => {
     const { state, error } = loadState();
     snapshot.current = state;
@@ -94,14 +98,22 @@ export default function App() {
     if (!saveState(d))
       setError('Your browser could not save this change. Export a backup to keep your log safe.');
   }
+  /** Swap in a whole new log (import, sample data or reset) and sync dependent form state. */
+  function replaceState(next: State) {
+    save(next);
+    setPlanWeek(weekAt(next.startDate, today()));
+    setStartInput(next.startDate);
+    setNameInput(next.name ?? '');
+    setRestEnd(0);
+    setError('');
+  }
+  function loadSample() {
+    replaceState({ ...createSampleState(today()), name: snapshot.current?.name });
+    setToast('Sample log loaded. Reset it any time in Settings.');
+  }
   async function importBackup(file: File) {
     try {
-      const imported = parseState(JSON.parse(await file.text()));
-      save(imported);
-      setPlanWeek(weekAt(imported.startDate, today()));
-      setStartInput(imported.startDate);
-      setNameInput(imported.name ?? '');
-      setError('');
+      replaceState(parseState(JSON.parse(await file.text())));
       setToast('Backup imported');
     } catch (e) {
       setError(
@@ -205,7 +217,7 @@ export default function App() {
   if (!d)
     return (
       <div className="loading">
-        <div className="brand-symbol">S</div>
+        <LogoMark size={52} />
         <p>Getting your training ready…</p>
       </div>
     );
@@ -218,8 +230,8 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="/" aria-label="Hermes Workout home">
-          <span className="brand-symbol">H</span>
+        <a className="brand" href={import.meta.env.BASE_URL} aria-label="Hermes Workout home">
+          <LogoMark className="brand-symbol" size={40} />
           <span>
             HERMES<span className="brand-sub">HOME STRENGTH, EVERY WEEK</span>
           </span>
@@ -257,7 +269,7 @@ export default function App() {
       <div className="main-shell">
         <header className="topbar">
           <div className="mobile-brand">
-            <span className="brand-symbol">H</span>
+            <LogoMark className="brand-symbol" size={40} />
             <b>HERMES</b>
           </div>
           <div className="breadcrumb">
@@ -340,11 +352,12 @@ export default function App() {
               onExpandedChange={setExpanded}
               onExportCsv={() => exportCsv(d.sessions)}
               onGoToday={() => setTab('today')}
+              onLoadSample={loadSample}
               onRequestDelete={setDeleteId}
             />
           )}
           <footer className="page-footer">
-            <span>BUILT FOR YOUR EVERYDAY.</span>
+            <span>HERMES WORKOUT · OPEN SOURCE · YOUR DATA STAYS ON THIS DEVICE</span>
             <span>One session at a time.</span>
           </footer>
         </main>
@@ -432,6 +445,12 @@ export default function App() {
       )}
       {showSettings && (
         <SettingsModal
+          onLoadSample={() => {
+            loadSample();
+            setShowSettings(false);
+            setTab('progress');
+          }}
+          onReset={() => setConfirmReset(true)}
           data={d}
           save={save}
           startInput={startInput}
@@ -449,7 +468,8 @@ export default function App() {
       )}
       {(deleteId || discard) && (
         <ConfirmModal
-          discard={discard}
+          title={discard ? 'Discard this session?' : 'Remove this entry?'}
+          body="This removes the entry from your log on this device."
           onCancel={() => {
             setDeleteId(null);
             setDiscard(false);
@@ -463,6 +483,21 @@ export default function App() {
             else save({ ...d, sessions: d.sessions.filter((s) => s.id !== deleteId) });
             setDeleteId(null);
             setDiscard(false);
+          }}
+        />
+      )}
+      {confirmReset && (
+        <ConfirmModal
+          title="Reset all data?"
+          body="This permanently clears every session, walk and setting stored in this browser. Export a backup first if you want to keep them."
+          confirmLabel="Reset"
+          onCancel={() => setConfirmReset(false)}
+          onConfirm={() => {
+            replaceState({ ...initialState(), name: d.name });
+            setConfirmReset(false);
+            setShowSettings(false);
+            setTab('today');
+            setToast('Your log has been reset');
           }}
         />
       )}

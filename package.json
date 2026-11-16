@@ -44,5 +44,21 @@
     "vite": "^8.3.8",
     "vitest": "^5.1.0"
   },
-  "packageManager": "pnpm@10.34.9"
+  "packageManager": "pnpm@10.34.9",
+  "homepage": "https://iamlukethedev.github.io/hermes-workout/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamlukethedev/hermes-workout.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iamlukethedev/hermes-workout/issues"
+  },
+  "keywords": [
+    "fitness",
+    "workout-tracker",
+    "threejs",
+    "react",
+    "local-first",
+    "pwa"
+  ]
 }

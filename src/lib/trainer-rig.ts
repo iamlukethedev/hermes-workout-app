@@ -7,8 +7,10 @@ export type TrainerEquipment = {
   size: [number, number, number];
   rotationX?: number;
 };
+/** Idle motion layered on a pose: both in -1..1, zero leaves the pose untouched. */
+export type TrainerLife = { breath: number; sway: number };
 export type TrainerRig = {
-  update(exercise: string, progress: number, side?: 'left' | 'right'): void;
+  update(exercise: string, progress: number, side?: 'left' | 'right', life?: TrainerLife): void;
   /** Fresh world-space palm/grip centres, in left/right order, for attached weights. */
   getHandPositions(): [THREE.Vector3, THREE.Vector3];
   getEquipment(exercise: string): TrainerEquipment[];
@@ -208,7 +210,13 @@ export function createTrainerRig(model: THREE.Object3D): TrainerRig {
       }
   };
 
-  const update = (exercise: string, progress: number, side: 'left' | 'right' = 'right') => {
+  const swayable = ['squat', 'split', 'calf', 'march', 'curl'];
+  const update = (
+    exercise: string,
+    progress: number,
+    side: 'left' | 'right' = 'right',
+    life: TrainerLife = { breath: 0, sway: 0 },
+  ) => {
     if (disposed) return;
     const t = THREE.MathUtils.clamp(Number.isFinite(progress) ? progress : 0, 0, 1),
       active = side === 'left' ? 'l' : 'r';
@@ -259,9 +267,17 @@ export function createTrainerRig(model: THREE.Object3D): TrainerRig {
     const calfOffset = footToBall.clone().applyQuaternion(qx(calfPitch));
     const calfAnkle = tuple(0.114, 0.015, 0.055).sub(calfOffset);
     if (exercise === 'calf') pelvis.add(tuple(0, calfAnkle.y - 0.086, calfAnkle.z + 0.088));
+    // A few millimetres of weight shift on standing poses; feet stay planted by IK below.
+    if (swayable.includes(exercise)) pelvis.x += 0.007 * life.sway;
     const pelvisBone = bone('pelvis');
     pelvisBone.position.copy(pelvisBone.parent!.worldToLocal(toWorld(pelvis)));
     setModelOrientation('pelvis', qx(pitch));
+    // Breathing lifts the chest slightly. Applied before limb IK so reach targets stay exact.
+    if (life.breath !== 0) {
+      bone('spine_02').quaternion.multiply(qx(-0.014 * life.breath));
+      bone('spine_03').quaternion.multiply(qx(-0.02 * life.breath));
+      bone('spine_02').updateWorldMatrix(false, true);
+    }
     // Keep the head comfortable on the floor when the pelvis rises into a bridge.
     if (exercise === 'bridge') {
       setModelOrientation('neck_01', qx(-Math.PI / 2));

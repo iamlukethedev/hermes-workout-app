@@ -1,4 +1,4 @@
-import { Download, Upload, X } from 'lucide-react';
+import { Download, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { weekday, type State } from '../../lib/training';
 import { downloadBackup, exportCsv } from '../../lib/export';
 
@@ -12,6 +12,8 @@ type Props = {
   onSaveStartDate: () => void;
   onImport: (file: File) => Promise<void>;
   onClose: () => void;
+  onLoadSample: () => void;
+  onReset: () => void;
 };
 
 export default function SettingsModal({
@@ -24,6 +26,8 @@ export default function SettingsModal({
   onSaveStartDate,
   onImport,
   onClose,
+  onLoadSample,
+  onReset,
 }: Props) {
   return (
     <div className="modal-overlay">
@@ -145,9 +149,17 @@ export default function SettingsModal({
             }}
           />
         </label>
+        <div className="two-fields">
+          <button className="secondary" onClick={onLoadSample}>
+            <Sparkles size={16} /> Load sample data
+          </button>
+          <button className="secondary danger-button" onClick={onReset}>
+            <Trash2 size={16} /> Reset all data
+          </button>
+        </div>
         <p className="small muted">
-          Importing replaces the log in this browser. On iPhone, open the site in Safari, then use
-          Share → Add to Home Screen.
+          Importing or loading sample data replaces the log in this browser. On iPhone, open the
+          site in Safari, then use Share → Add to Home Screen.
         </p>
       </section>
     </div>

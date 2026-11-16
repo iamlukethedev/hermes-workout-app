@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Pause, Play, RotateCcw, ZoomIn, ZoomOut, Rotate3D } from 'lucide-react';
 import { createTrainerRig } from '../lib/trainer-rig';
 import { createSoftwareScene } from '../lib/software-scene';
+import './movement-demo.css';
 
 const phases: Record<string, [string, string]> = {
   squat: ['Sit softly', 'Stand tall'],
@@ -33,6 +36,59 @@ const focusLabels: Record<string, string> = {
   march: 'Legs',
 };
 const unilateral = ['heel', 'bird', 'split'];
+const ACCENT = '#d4ee89';
+const DEFAULT_AZIMUTH = 0.65;
+// The wall push-up wall stands in front of the trainer, so view it from the side.
+const angleFor = (exercise: string) => (exercise === 'pushup' ? 1.95 : DEFAULT_AZIMUTH);
+const presetAzimuth: Record<string, number> = {
+  Front: 0,
+  Side: Math.PI / 2,
+  Angle: DEFAULT_AZIMUTH,
+};
+const smoother = (x: number) => {
+  const c = Math.min(1, Math.max(0, x));
+  return c * c * c * (c * (c * 6 - 15) + 10);
+};
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/** Rep tempo: quicker lift, pause at the top, slower lowering, settle at the bottom. */
+function repProfile(exercise: string, cycle: number) {
+  if (exercise === 'bird') {
+    if (cycle < 0.31) return { t: smoother(cycle / 0.31), phase: 1 };
+    if (cycle < 0.69) return { t: 1, phase: 2 };
+    return { t: 1 - smoother((cycle - 0.69) / 0.31), phase: 0 };
+  }
+  if (cycle < 0.38) return { t: smoother(cycle / 0.38), phase: 1 };
+  if (cycle < 0.5) return { t: 1, phase: 1 };
+  if (cycle < 0.92) return { t: 1 - smoother((cycle - 0.5) / 0.42), phase: 0 };
+  return { t: 0, phase: 0 };
+}
+
+function gradientTexture(
+  size: number,
+  stops: [number, string][],
+  opts: { colorSpace?: THREE.ColorSpace; center?: [number, number]; radius?: number } = {},
+) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!,
+    [cx, cy] = opts.center ?? [0.5, 0.5],
+    g = ctx.createRadialGradient(
+      size * cx,
+      size * cy,
+      0,
+      size * cx,
+      size * cy,
+      size * (opts.radius ?? 0.5),
+    );
+  stops.forEach(([at, color]) => g.addColorStop(at, color));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = opts.colorSpace ?? THREE.SRGBColorSpace;
+  return texture;
+}
+
 type Engine = {
   playing: boolean;
   speed: number;
@@ -43,12 +99,36 @@ type Engine = {
   zoom?: (factor: number) => void;
 };
 
-function bodyColors(model: THREE.Object3D, exercise: string, highlight: boolean) {
+type Pulse = { value: number };
+
+/** Adds a per-vertex focus mask so the highlight can glow on the GPU without repainting colours. */
+function glowOnMask(material: THREE.Material, pulse: Pulse) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uPulse = pulse;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nattribute float aActive;\nvarying float vActive;',
+      )
+      .replace('#include <color_vertex>', '#include <color_vertex>\nvActive = aActive;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nuniform float uPulse;\nvarying float vActive;',
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(0.46, 0.55, 0.2) * vActive * uPulse;`,
+      );
+  };
+}
+
+function bodyColors(model: THREE.Object3D, exercise: string, highlight: boolean, pulse: Pulse) {
   const v = new THREE.Vector3(),
     skin = new THREE.Color('#c4d3c9'),
     shirt = new THREE.Color('#769c87'),
     shorts = new THREE.Color('#263e36'),
-    accent = new THREE.Color('#d5ee92');
+    accent = new THREE.Color(ACCENT);
   model.updateMatrixWorld(true);
   model.traverse((obj) => {
     if (!(obj instanceof THREE.SkinnedMesh)) return;
@@ -63,7 +143,8 @@ function bodyColors(model: THREE.Object3D, exercise: string, highlight: boolean)
       g.userData.restWorld = coords;
     }
     const coords = g.userData.restWorld as number[],
-      arr = new Float32Array(pos.count * 3);
+      arr = new Float32Array(pos.count * 3),
+      mask = new Float32Array(pos.count);
     for (let i = 0; i < pos.count; i++) {
       const x = Math.abs(coords[i * 3]),
         y = coords[i * 3 + 1],
@@ -87,17 +168,24 @@ function bodyColors(model: THREE.Object3D, exercise: string, highlight: boolean)
       if (exercise === 'curl') active = x > 0.24 && y > 0.98 && y < 1.43;
       if (highlight && active) c = accent;
       arr.set([c.r, c.g, c.b], i * 3);
+      mask[i] = active ? 1 : 0;
     }
     g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    g.setAttribute('aActive', new THREE.BufferAttribute(mask, 1));
     if (!obj.userData.materialReplaced) {
       const old = Array.isArray(obj.material) ? obj.material : [obj.material];
       old.forEach((m) => m.dispose());
-      obj.material = new THREE.MeshStandardMaterial({
-        color: obj.name.toLowerCase().includes('eye') ? '#263e36' : '#ffffff',
-        vertexColors: !obj.name.toLowerCase().includes('eye'),
-        roughness: 0.72,
-        metalness: 0.02,
+      const eye = obj.name.toLowerCase().includes('eye');
+      obj.material = new THREE.MeshPhysicalMaterial({
+        color: eye ? '#263e36' : '#ffffff',
+        vertexColors: !eye,
+        roughness: eye ? 0.35 : 0.64,
+        metalness: 0,
+        sheen: eye ? 0 : 0.7,
+        sheenRoughness: 0.55,
+        sheenColor: new THREE.Color('#a9cdb9'),
       });
+      if (!eye) glowOnMask(obj.material, pulse);
       obj.userData.materialReplaced = true;
       obj.castShadow = true;
       obj.receiveShadow = true;
@@ -132,15 +220,17 @@ export default function MovementDemo({
       loaded = false,
       visible = true,
       paintedFocus = false;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     engine.current.time = 0;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (reduced) {
       engine.current.playing = false;
       setPlaying(false);
     }
     setStatus('Loading trainer…');
+    const disposables: { dispose(): void }[] = [];
+    const own = <T extends { dispose(): void }>(item: T) => (disposables.push(item), item);
+    const pulse: Pulse = { value: 0 };
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#13251f');
-    scene.fog = new THREE.Fog('#13251f', 8, 18);
     const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 40);
     const canvas = document.createElement('canvas');
     canvas.setAttribute('aria-label', `Interactive 3D ${exercise} demonstration`);
@@ -149,13 +239,18 @@ export default function MovementDemo({
     let gpu: THREE.WebGLRenderer | undefined,
       cpu: ReturnType<typeof createSoftwareScene> | undefined;
     try {
-      gpu = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'low-power' });
-      gpu.setPixelRatio(Math.min(devicePixelRatio, 1.6));
+      gpu = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        powerPreference: 'high-performance',
+      });
+      gpu.setPixelRatio(Math.min(devicePixelRatio, 2));
       gpu.shadowMap.enabled = true;
-      gpu.shadowMap.type = THREE.PCFSoftShadowMap;
+      // Soft-filtered in three >= 0.18x (PCFSoftShadowMap was folded into PCFShadowMap).
+      gpu.shadowMap.type = THREE.PCFShadowMap;
       gpu.outputColorSpace = THREE.SRGBColorSpace;
       gpu.toneMapping = THREE.ACESFilmicToneMapping;
-      gpu.toneMappingExposure = 1.2;
+      gpu.toneMappingExposure = 0.95;
       setSoftware(false);
     } catch {
       canvas.remove();
@@ -166,9 +261,31 @@ export default function MovementDemo({
       cpu = createSoftwareScene(fallback);
       setSoftware(true);
     }
+    scene.background = own(
+      gradientTexture(
+        256,
+        [
+          [0, '#2b4d3f'],
+          [0.55, '#183128'],
+          [1, '#0d1914'],
+        ],
+        { center: [0.5, 0.62], radius: 0.78 },
+      ),
+    );
+    if (gpu) {
+      const pmrem = new THREE.PMREMGenerator(gpu);
+      const room = new RoomEnvironment();
+      const envMap = pmrem.fromScene(room, 0.04).texture;
+      scene.environment = envMap;
+      scene.environmentIntensity = 0.55;
+      own(pmrem);
+      own(envMap);
+      room.dispose();
+    }
     const surface = gpu?.domElement || root.querySelector('canvas')!;
     const controls = new OrbitControls(camera, surface);
     controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
     controls.enablePan = false;
     controls.enableZoom = !compact;
     controls.enableRotate = !compact;
@@ -179,15 +296,32 @@ export default function MovementDemo({
     const floorPose = ['bridge', 'heel', 'bird', 'press', 'row'].includes(exercise);
     controls.target.set(0, floorPose ? 0.62 : 0.92, 0);
     let width = 1,
-      height = 1;
-    const fit = (angle: number) => {
-      const extent = floorPose ? 1.25 : 0.83,
-        d = Math.max(
-          3.7,
-          extent / (Math.tan(THREE.MathUtils.degToRad(17.5)) * Math.max(camera.aspect, 0.4)),
-        );
-      camera.position.set(Math.sin(angle) * d, controls.target.y + d * 0.2, Math.cos(angle) * d);
-      controls.update();
+      height = 1,
+      baseDistance = 3.7,
+      orbitClock = 0;
+    // Damped camera move toward a goal expressed around the orbit target.
+    let goal: { theta: number; h: number; y: number } | null = null;
+    const place = (theta: number, h: number, y: number) =>
+      camera.position.set(
+        controls.target.x + Math.sin(theta) * h,
+        controls.target.y + y,
+        controls.target.z + Math.cos(theta) * h,
+      );
+    const polar = () => {
+      const o = camera.position.clone().sub(controls.target);
+      return { theta: Math.atan2(o.x, o.z), h: Math.hypot(o.x, o.z), y: o.y };
+    };
+    const fit = (angle: number, instant: boolean) => {
+      const extent = floorPose ? 1.25 : 0.83;
+      baseDistance = Math.max(
+        3.7,
+        extent / (Math.tan(THREE.MathUtils.degToRad(17.5)) * Math.max(camera.aspect, 0.4)),
+      );
+      if (instant) {
+        goal = null;
+        place(angle, baseDistance, baseDistance * 0.2);
+        controls.update();
+      } else goal = { theta: angle, h: baseDistance, y: baseDistance * 0.2 };
     };
     const resize = () => {
       width = Math.max(root.clientWidth, 1);
@@ -196,44 +330,65 @@ export default function MovementDemo({
       camera.updateProjectionMatrix();
       gpu?.setSize(width, height, false);
       cpu?.setSize(width, height);
-      fit(0.65);
+      const current = polar();
+      fit(current.h < 1e-3 || compact ? angleFor(exercise) : current.theta, true);
     };
     const observer = new ResizeObserver(resize);
     observer.observe(root);
     resize();
     engine.current.camera = (name) => {
-      fit(name === 'Side' ? Math.PI / 2 : name === 'Front' ? 0 : 0.65);
+      fit(name === 'Angle' ? angleFor(exercise) : (presetAzimuth[name] ?? DEFAULT_AZIMUTH), false);
+      dirty = true;
     };
     engine.current.zoom = (factor) => {
-      const offset = camera.position.clone().sub(controls.target).multiplyScalar(factor);
-      offset.clampLength(controls.minDistance, controls.maxDistance);
-      camera.position.copy(controls.target).add(offset);
-      controls.update();
+      const now = polar(),
+        r = Math.hypot(now.h, now.y),
+        scale = THREE.MathUtils.clamp(r * factor, controls.minDistance, controls.maxDistance) / r;
+      goal = { theta: now.theta, h: now.h * scale, y: now.y * scale };
+      dirty = true;
     };
-    scene.add(new THREE.HemisphereLight('#eaffef', '#223e31', 2.1));
-    const key = new THREE.DirectionalLight('#fff3df', 3.3);
+    const lights = new THREE.Group();
+    scene.add(lights);
+    lights.add(new THREE.HemisphereLight('#dff7e8', '#1d382c', 0.9));
+    const key = new THREE.DirectionalLight('#fff1dc', 3.1);
     key.position.set(-3, 5, 4);
     key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
-    key.shadow.camera.left = -3;
-    key.shadow.camera.right = 3;
-    key.shadow.camera.top = 3;
-    key.shadow.camera.bottom = -3;
-    key.shadow.normalBias = 0.025;
-    scene.add(key);
-    const rim = new THREE.DirectionalLight('#c4e9cb', 2.3);
-    rim.position.set(3, 3, -3);
-    scene.add(rim);
-    const fill = new THREE.DirectionalLight('#b1cad2', 1);
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, {
+      left: -2.4,
+      right: 2.4,
+      top: 2.4,
+      bottom: -2.4,
+      near: 1,
+      far: 14,
+    });
+    key.shadow.radius = 3.5;
+    key.shadow.bias = -0.0004;
+    key.shadow.normalBias = 0.02;
+    lights.add(key);
+    const rim = new THREE.DirectionalLight('#d4ee89', 1.9);
+    rim.position.set(3.5, 3, -3.5);
+    lights.add(rim);
+    const fill = new THREE.DirectionalLight('#9fc8b6', 0.9);
     fill.position.set(4, 2, 3);
-    scene.add(fill);
+    lights.add(fill);
     const props = new THREE.Group();
     scene.add(props);
-    const box = (position: number[], size: number[], color: string, rotation = 0) => {
-      const m = new THREE.Mesh(
-        new THREE.BoxGeometry(...(size as [number, number, number])),
-        new THREE.MeshStandardMaterial({ color, roughness: 0.75 }),
-      );
+    const steel = own(
+      new THREE.MeshStandardMaterial({ color: '#b9c6bf', metalness: 0.85, roughness: 0.28 }),
+    );
+    const box = (
+      position: number[],
+      size: number[],
+      color: string,
+      rotation = 0,
+      radius = 0.014,
+    ) => {
+      const [w, h, d] = size,
+        m = new THREE.Mesh(
+          new RoundedBoxGeometry(w, h, d, 3, Math.min(radius, w / 2.2, h / 2.2, d / 2.2)),
+          new THREE.MeshStandardMaterial({ color, roughness: 0.7 }),
+        );
       m.position.set(...(position as [number, number, number]));
       m.rotation.x = rotation;
       m.castShadow = true;
@@ -241,37 +396,114 @@ export default function MovementDemo({
       props.add(m);
       return m;
     };
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(200, 200),
-      new THREE.MeshStandardMaterial({ color: '#18372a', roughness: 1 }),
+    const decor = (mesh: THREE.Mesh) => {
+      mesh.userData.skipSoftware = true;
+      scene.add(mesh);
+      return mesh;
+    };
+    const floor = decor(
+      new THREE.Mesh(
+        new THREE.CircleGeometry(7, 64),
+        new THREE.MeshStandardMaterial({
+          color: '#1a362b',
+          roughness: 0.95,
+          transparent: true,
+          alphaMap: own(
+            gradientTexture(
+              256,
+              [
+                [0, '#fff'],
+                [0.2, '#fff'],
+                [0.78, '#000'],
+              ],
+              { colorSpace: THREE.NoColorSpace },
+            ),
+          ),
+        }),
+      ),
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -0.045;
     floor.receiveShadow = true;
-    floor.userData.skipSoftware = true;
-    scene.add(floor);
-    box([0, -0.03, 0], [1.5, 0.025, floorPose ? 2.8 : 1.5], '#29493b');
-    const grid = new THREE.GridHelper(12, 24, '#355142', '#243d31');
-    grid.position.y = -0.043;
-    grid.userData.skipSoftware = true;
-    scene.add(grid);
+    const pool = decor(
+      new THREE.Mesh(
+        new THREE.CircleGeometry(2.1, 48),
+        new THREE.MeshBasicMaterial({
+          map: own(
+            gradientTexture(128, [
+              [0, 'rgba(118,156,135,0.34)'],
+              [1, 'rgba(118,156,135,0)'],
+            ]),
+          ),
+          transparent: true,
+          depthWrite: false,
+        }),
+      ),
+    );
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.y = -0.043;
+    for (const [radius, opacity] of [
+      [1.55, 0.2],
+      [2.35, 0.1],
+    ]) {
+      const ring = decor(
+        new THREE.Mesh(
+          new THREE.RingGeometry(radius, radius + 0.008, 96),
+          new THREE.MeshBasicMaterial({
+            color: ACCENT,
+            transparent: true,
+            opacity,
+            depthWrite: false,
+          }),
+        ),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = -0.042;
+    }
+    box([0, -0.03, 0], [1.5, 0.025, floorPose ? 2.8 : 1.5], '#2a4b3d', 0, 0.011);
+    const contact = decor(
+      new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+          map: own(
+            gradientTexture(128, [
+              [0, 'rgba(4,10,7,0.62)'],
+              [0.55, 'rgba(4,10,7,0.28)'],
+              [1, 'rgba(4,10,7,0)'],
+            ]),
+          ),
+          transparent: true,
+          depthWrite: false,
+        }),
+      ),
+    );
+    contact.rotation.x = -Math.PI / 2;
+    contact.position.y = -0.0165;
+    contact.scale.set(floorPose ? 1.15 : 1.05, floorPose ? 2.3 : 1.05, 1);
+    const rubber = own(new THREE.MeshStandardMaterial({ color: '#202b26', roughness: 0.55 }));
+    const dumbbellGeometry = {
+      handle: own(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 16)),
+      head: own(new THREE.CylinderGeometry(0.085, 0.085, 0.07, 6)),
+      cap: own(new THREE.CylinderGeometry(0.045, 0.045, 0.082, 20)),
+    };
     const dumbbells = [new THREE.Group(), new THREE.Group()];
     dumbbells.forEach((group) => {
-      const handle = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.022, 0.022, 0.28, 10),
-        new THREE.MeshStandardMaterial({ color: '#c2ccc7', metalness: 0.8, roughness: 0.25 }),
-      );
+      const handle = new THREE.Mesh(dumbbellGeometry.handle, steel);
       handle.rotation.z = Math.PI / 2;
+      handle.castShadow = true;
       group.add(handle);
-      for (const x of [-0.14, 0.14]) {
-        const plate = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.09, 0.09, 0.065, 6),
-          new THREE.MeshStandardMaterial({ color: '#46594e', metalness: 0.45, roughness: 0.4 }),
-        );
-        plate.rotation.z = Math.PI / 2;
-        plate.position.x = x;
-        plate.castShadow = true;
-        group.add(plate);
+      for (const x of [-0.145, 0.145]) {
+        for (const [geometry, material] of [
+          [dumbbellGeometry.head, rubber],
+          [dumbbellGeometry.cap, steel],
+        ] as const) {
+          const part = new THREE.Mesh(geometry, material);
+          part.rotation.z = Math.PI / 2;
+          part.rotation.y = Math.PI / 6;
+          part.position.x = x;
+          part.castShadow = true;
+          group.add(part);
+        }
       }
       scene.add(group);
       group.visible = ['press', 'row', 'curl'].includes(exercise);
@@ -286,23 +518,45 @@ export default function MovementDemo({
         if (o instanceof THREE.SkinnedMesh) o.skeleton.dispose();
       });
     new GLTFLoader().load(
-      '/models/trainer.glb',
+      `${import.meta.env.BASE_URL}models/trainer.glb`,
       (gltf) => {
         if (disposed) {
           release(gltf.scene);
           return;
         }
         model = gltf.scene;
-        bodyColors(model, exercise, false);
+        bodyColors(model, exercise, false, pulse);
         scene.add(model);
         rig = createTrainerRig(model);
         rig.getEquipment(exercise).forEach((e) => {
-          box(e.position, e.size, e.kind === 'bench' ? '#657c66' : '#3a5547', e.rotationX || 0);
+          const pad = '#5f8570',
+            frame = '#2f4339';
+          const mesh = box(
+            e.position,
+            e.size,
+            e.kind === 'bench' ? pad : e.kind === 'wall' ? '#223b31' : frame,
+            e.rotationX || 0,
+            e.kind === 'bench' ? 0.04 : 0.01,
+          );
+          if (e.kind === 'wall') {
+            // Frosted so the trainer stays visible from the front preset.
+            const material = mesh.material as THREE.MeshStandardMaterial;
+            material.transparent = true;
+            material.opacity = 0.42;
+            material.depthWrite = false;
+            mesh.castShadow = false;
+          }
           if (e.kind === 'bench') {
             for (const z of [-e.size[2] * 0.34, e.size[2] * 0.34]) {
               const y = Math.max(0.1, (e.position[1] - Math.tan(e.rotationX || 0) * z - 0.045) / 2);
-              box([e.position[0], y, e.position[2] + z], [0.06, y * 2, 0.065], '#a8b5ac');
-              box([e.position[0], 0.035, e.position[2] + z], [0.62, 0.055, 0.12], '#718478');
+              box([e.position[0], y, e.position[2] + z], [0.06, y * 2, 0.065], '#aab8b0');
+              box(
+                [e.position[0], 0.035, e.position[2] + z],
+                [0.62, 0.055, 0.12],
+                '#2f4339',
+                0,
+                0.02,
+              );
             }
           }
           if (e.kind === 'support')
@@ -327,57 +581,78 @@ export default function MovementDemo({
     let lastRender = 0,
       lastUI = 0,
       lastTime = -1,
-      lastSide = '',
+      shownSide: 'left' | 'right' = engine.current.side,
+      sideFade = 1,
+      breathClock = 0,
       dirty = true;
     controls.addEventListener('change', () => {
       dirty = true;
     });
+    controls.addEventListener('start', () => {
+      goal = null;
+    });
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
-      if (
-        !loaded ||
-        !visible ||
-        document.hidden ||
-        now - lastRender < (cpu ? 75 : compact ? 40 : 25)
-      )
-        return;
-      const elapsed = Math.min((now - lastRender) / 1000, 0.1);
+      if (!loaded || !visible || document.hidden || (cpu && now - lastRender < 75)) return;
+      const dt = Math.min((now - lastRender) / 1000, 0.1);
       lastRender = now;
       const e = engine.current;
+      if (e.focus !== paintedFocus) {
+        bodyColors(model!, exercise, e.focus, pulse);
+        paintedFocus = e.focus;
+        dirty = true;
+      }
+      const orbiting = compact && e.playing && !reduced;
+      const switching = e.side !== shownSide || sideFade < 1;
       if (
         !e.playing &&
+        !goal &&
+        !switching &&
+        !(e.focus && gpu && !reduced) &&
         e.time === lastTime &&
-        e.side === lastSide &&
-        e.focus === paintedFocus &&
         !dirty
       )
         return;
       dirty = false;
-      if (e.playing)
-        e.time = (e.time + (elapsed * e.speed) / (exercise === 'bird' ? 7.8 : 5.6)) % 1;
-      const cycle = e.time;
-      let t = (1 - Math.cos(cycle * Math.PI * 2)) / 2;
-      let ph = cycle < 0.5 ? 1 : 0;
-      if (exercise === 'bird') {
-        t =
-          cycle < 0.31
-            ? (1 - Math.cos((cycle / 0.31) * Math.PI)) / 2
-            : cycle < 0.69
-              ? 1
-              : (1 + Math.cos(((cycle - 0.69) / 0.31) * Math.PI)) / 2;
-        ph = cycle < 0.31 ? 1 : cycle < 0.69 ? 2 : 0;
+      if (e.playing) {
+        e.time = (e.time + (dt * e.speed) / (exercise === 'bird' ? 8.4 : 6.4)) % 1;
+        breathClock += dt;
       }
-      rig!.update(exercise, t, e.side);
+      // Switching sides eases the working limb back to rest before swapping it.
+      if (e.side !== shownSide) {
+        sideFade = Math.max(0, sideFade - dt / 0.22);
+        if (sideFade === 0) shownSide = e.side;
+      } else if (sideFade < 1) sideFade = Math.min(1, sideFade + dt / 0.3);
+      const cycle = e.time,
+        { t, phase: ph } = repProfile(exercise, cycle);
+      rig!.update(exercise, t * smoother(sideFade), shownSide, {
+        breath: Math.sin((breathClock * Math.PI * 2) / 4.4),
+        sway: Math.sin((breathClock * Math.PI * 2) / 9.5),
+      });
       rig!.getHandPositions().forEach((p, i) => dumbbells[i].position.copy(p));
-      if (e.focus !== paintedFocus) {
-        bodyColors(model!, exercise, e.focus);
-        paintedFocus = e.focus;
+      pulse.value = e.focus ? (reduced ? 0.3 : 0.28 + 0.2 * Math.sin((now / 1000) * 3.9)) : 0;
+      if (orbiting) {
+        orbitClock += dt;
+        place(
+          angleFor(exercise) + 0.5 * Math.sin(orbitClock * 0.32),
+          baseDistance,
+          baseDistance * 0.2,
+        );
+      } else if (goal) {
+        const now2 = polar(),
+          k = 1 - Math.exp(-dt * 7),
+          dTheta = wrapAngle(goal.theta - now2.theta);
+        place(
+          now2.theta + dTheta * k,
+          now2.h + (goal.h - now2.h) * k,
+          now2.y + (goal.y - now2.y) * k,
+        );
+        if (Math.abs(dTheta) < 0.002 && Math.abs(goal.h - now2.h) < 0.003) goal = null;
       }
       controls.update();
       gpu?.render(scene, camera);
       cpu?.render(scene, camera);
       lastTime = e.time;
-      lastSide = e.side;
       if (!e.playing || now - lastUI > 100) {
         setProgress(Math.round(cycle * 100));
         setPhase(ph);
@@ -399,8 +674,7 @@ export default function MovementDemo({
       controls.dispose();
       rig?.dispose();
       release(scene);
-      grid.geometry.dispose();
-      (grid.material as THREE.Material).dispose();
+      disposables.forEach((d) => d.dispose());
       gpu?.dispose();
       cpu?.dispose();
       surface.removeEventListener('webglcontextlost', loss);

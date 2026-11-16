@@ -1,8 +1,25 @@
-# Hermes Workout
+<p align="center">
+  <img src="public/icon-192.png" width="88" height="88" alt="Hermes Workout logo" />
+</p>
 
-A local-first home strength tracker with an interactive 3D movement guide. Designed for a pair of adjustable dumbbells, a bench and bodyweight training, with a gentle, back-friendly beginner programme.
+<h1 align="center">Hermes Workout</h1>
 
-Your training log never leaves your browser: no account, no server and no tracking.
+<p align="center">
+  A local-first home strength tracker with an interactive 3D movement guide.<br />
+  No account. No server. No tracking. Your log stays on your device.
+</p>
+
+<p align="center">
+  <a href="https://iamlukethedev.github.io/hermes-workout/"><strong>Live demo</strong></a> ·
+  <a href="#getting-started">Run locally</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/today.png" alt="Hermes Workout today screen with the 3D trainer" />
+</p>
+
+Designed for a pair of adjustable dumbbells, a bench and bodyweight training, with a gentle, back-friendly eight-week beginner programme.
 
 ## Features
 
@@ -13,6 +30,12 @@ Your training log never leaves your browser: no account, no server and no tracki
 - **3D movement studio.** A rigged human trainer demonstrates every exercise, with orbit, zoom, camera presets, slow motion, pose scrubbing, left/right views and body-region highlights.
 - **Works everywhere.** WebGL with a CPU fallback renderer for browsers without it, reduced-motion support, and a mobile layout you can add to your home screen.
 - **Your data, portable.** Export a JSON backup or a CSV of every set; import the backup on another device.
+- **Try it instantly.** Load a sample three-week log from the Progress tab to explore charts and history without training first.
+
+<p align="center">
+  <img src="docs/screenshots/studio.png" width="49%" alt="3D movement studio" />
+  <img src="docs/screenshots/progress.png" width="49%" alt="Progress charts and session history" />
+</p>
 
 ## Exercises
 

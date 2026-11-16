@@ -1,4 +1,4 @@
-import { ChevronRight, Dumbbell, Play } from 'lucide-react';
+import { ChevronRight, Play } from 'lucide-react';
 import { exercises, type Exercise } from '../../lib/training';
 
 type Props = {
@@ -43,9 +43,14 @@ export default function MovesTab({ filter, onFilterChange, onOpenExercise }: Pro
                 <span className="big-number">
                   {String(exercises.indexOf(e) + 1).padStart(2, '0')}
                 </span>
-                <div className="movement-glyph">
-                  <Dumbbell size={44} strokeWidth={1} />
-                </div>
+                <img
+                  className="movement-thumb"
+                  src={`${import.meta.env.BASE_URL}thumbs/${e.id}.jpg`}
+                  alt=""
+                  loading="lazy"
+                  width={720}
+                  height={362}
+                />
                 <span className="play-orb">
                   <Play size={19} />
                 </span>

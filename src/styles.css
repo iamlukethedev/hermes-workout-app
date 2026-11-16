@@ -137,18 +137,9 @@ textarea {
   letter-spacing: 0.045em;
 }
 .brand-symbol {
-  background: var(--forest);
-  color: var(--lime);
-  width: 38px;
-  height: 40px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-family: 'Manrope Variable', sans-serif;
-  font-style: italic;
-  font-size: 28px;
-  line-height: 1;
+  flex: none;
+  border-radius: 11px;
+  box-shadow: 0 6px 16px -8px rgba(14, 28, 23, 0.6);
 }
 .brand-sub {
   display: block;
@@ -858,30 +849,30 @@ main {
   background: #fff;
 }
 .movement-art {
-  height: 150px;
-  background: #e7edde;
+  height: 190px;
+  background: radial-gradient(ellipse at 50% 70%, #3c6152, #14251f 75%);
   position: relative;
   display: grid;
   place-items: center;
   overflow: hidden;
 }
+.movement-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.movement-card:hover .movement-thumb {
+  transform: scale(1.05);
+}
 .movement-art:after {
   content: '';
   position: absolute;
   inset: 0;
-  background:
-    repeating-linear-gradient(0deg, transparent, transparent 24px, #82956810 25px),
-    repeating-linear-gradient(90deg, transparent, transparent 24px, #82956810 25px);
-}
-.art-press,
-.art-pushup,
-.art-curl {
-  background: #e6ebe5;
-}
-.art-bridge,
-.art-heel,
-.art-bird {
-  background: #eeeada;
+  background: linear-gradient(180deg, transparent 55%, rgba(10, 22, 17, 0.55));
+  pointer-events: none;
 }
 .big-number {
   position: absolute;
@@ -890,11 +881,8 @@ main {
   font-size: 42px;
   font-family: 'Manrope Variable', sans-serif;
   font-weight: 700;
-  color: #65734f20;
-}
-.movement-glyph {
-  transform: rotate(-25deg);
-  color: #7b9064;
+  color: #ffffff2e;
+  z-index: 1;
 }
 .play-orb {
   height: 40px;
@@ -915,7 +903,8 @@ main {
   left: 16px;
   font-size: 7px;
   letter-spacing: 0.15em;
-  color: #8c997e;
+  color: #d4ee89;
+  z-index: 1;
 }
 .movement-card-copy {
   padding: 21px;
@@ -999,6 +988,7 @@ main {
   height: 200px;
   display: flex;
   align-items: flex-end;
+  justify-content: space-evenly;
   gap: 15px;
   border-bottom: 1px solid var(--line);
   margin-bottom: 13px;
@@ -1006,7 +996,7 @@ main {
 }
 .chart-bars > div {
   flex: 1;
-  max-width: 80px;
+  max-width: 120px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1015,10 +1005,25 @@ main {
   color: #72865b;
 }
 .chart-bars > div > div {
-  width: 70%;
+  width: 64%;
   min-width: 12px;
-  background: #b5cf8a;
-  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, #c9e19c, #9fbd73);
+  border-radius: 8px 8px 2px 2px;
+  transform-origin: bottom;
+  animation: bar-rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.chart-bars > div:last-child > div {
+  background: linear-gradient(180deg, #2c4a3e, var(--forest));
+  box-shadow: 0 0 0 3px #d4ee8955;
+}
+.chart-bars > div:last-child > span {
+  color: var(--forest);
+  font-weight: 700;
+}
+@keyframes bar-rise {
+  from {
+    transform: scaleY(0);
+  }
 }
 .chart-bars small {
   font-size: 8px;
@@ -1542,10 +1547,9 @@ main {
     letter-spacing: 0.07em;
   }
   .brand-symbol {
-    width: 30px;
+    width: 32px;
     height: 32px;
-    border-radius: 8px;
-    font-size: 22px;
+    border-radius: 9px;
   }
   .sync-state {
     font-size: 8px;
@@ -1795,14 +1799,11 @@ main {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .movement-art {
-    height: 120px;
+    height: 130px;
   }
   .big-number {
     font-size: 34px;
     left: 12px;
-  }
-  .movement-glyph svg {
-    width: 34px;
   }
   .play-orb {
     height: 31px;
@@ -2337,4 +2338,21 @@ main {
   width: 100%;
   margin-top: 10px;
   cursor: pointer;
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.empty-actions .secondary,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.danger-button {
+  color: #9b3d2f;
 }

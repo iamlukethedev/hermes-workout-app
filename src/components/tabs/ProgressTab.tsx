@@ -6,6 +6,7 @@ import {
   Dumbbell,
   Flame,
   Footprints,
+  Sparkles,
   TrendingUp,
 } from 'lucide-react';
 import { exercises, labelDate, type Session, type State } from '../../lib/training';
@@ -19,6 +20,7 @@ type Props = {
   onExpandedChange: (id: string | null) => void;
   onExportCsv: () => void;
   onGoToday: () => void;
+  onLoadSample: () => void;
   onRequestDelete: (id: string) => void;
 };
 
@@ -31,6 +33,7 @@ export default function ProgressTab({
   onExpandedChange,
   onExportCsv,
   onGoToday,
+  onLoadSample,
   onRequestDelete,
 }: Props) {
   const bestKg = (s: Session) =>
@@ -146,9 +149,14 @@ export default function ProgressTab({
           </div>
           <h3>A fresh start looks good on you.</h3>
           <p>Your completed sessions and check-ins will appear here.</p>
-          <button className="primary" onClick={() => onGoToday()}>
-            Go to your first workout <ArrowRight size={17} />
-          </button>
+          <div className="empty-actions">
+            <button className="primary" onClick={() => onGoToday()}>
+              Go to your first workout <ArrowRight size={17} />
+            </button>
+            <button className="secondary" onClick={onLoadSample}>
+              <Sparkles size={16} /> Explore with sample data
+            </button>
+          </div>
         </section>
       ) : (
         <div className="history-list">
