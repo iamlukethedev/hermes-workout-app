@@ -36,7 +36,7 @@ const focusLabels: Record<string, string> = {
   march: 'Legs',
 };
 const unilateral = ['heel', 'bird', 'split'];
-const ACCENT = '#d4ee89';
+const ACCENT = '#ffffff';
 const DEFAULT_AZIMUTH = 0.65;
 // The wall push-up wall stands in front of the trainer, so view it from the side.
 const angleFor = (exercise: string) => (exercise === 'pushup' ? 1.95 : DEFAULT_AZIMUTH);
@@ -125,9 +125,9 @@ function glowOnMask(material: THREE.Material, pulse: Pulse) {
 
 function bodyColors(model: THREE.Object3D, exercise: string, highlight: boolean, pulse: Pulse) {
   const v = new THREE.Vector3(),
-    skin = new THREE.Color('#c4d3c9'),
-    shirt = new THREE.Color('#769c87'),
-    shorts = new THREE.Color('#263e36'),
+    skin = new THREE.Color('#d2d2d2'),
+    shirt = new THREE.Color('#2a2a2a'),
+    shorts = new THREE.Color('#121212'),
     accent = new THREE.Color(ACCENT);
   model.updateMatrixWorld(true);
   model.traverse((obj) => {
@@ -177,13 +177,13 @@ function bodyColors(model: THREE.Object3D, exercise: string, highlight: boolean,
       old.forEach((m) => m.dispose());
       const eye = obj.name.toLowerCase().includes('eye');
       obj.material = new THREE.MeshPhysicalMaterial({
-        color: eye ? '#263e36' : '#ffffff',
+        color: eye ? '#2d2d2d' : '#ffffff',
         vertexColors: !eye,
         roughness: eye ? 0.35 : 0.64,
         metalness: 0,
         sheen: eye ? 0 : 0.7,
         sheenRoughness: 0.55,
-        sheenColor: new THREE.Color('#a9cdb9'),
+        sheenColor: new THREE.Color('#d4d4d4'),
       });
       if (!eye) glowOnMask(obj.material, pulse);
       obj.userData.materialReplaced = true;
@@ -265,9 +265,9 @@ export default function MovementDemo({
       gradientTexture(
         256,
         [
-          [0, '#2b4d3f'],
-          [0.55, '#183128'],
-          [1, '#0d1914'],
+          [0, '#3b3b3b'],
+          [0.55, '#212121'],
+          [1, '#0e0e0e'],
         ],
         { center: [0.5, 0.62], radius: 0.78 },
       ),
@@ -349,8 +349,8 @@ export default function MovementDemo({
     };
     const lights = new THREE.Group();
     scene.add(lights);
-    lights.add(new THREE.HemisphereLight('#dff7e8', '#1d382c', 0.9));
-    const key = new THREE.DirectionalLight('#fff1dc', 3.1);
+    lights.add(new THREE.HemisphereLight('#f9f9f9', '#272727', 0.9));
+    const key = new THREE.DirectionalLight('#fafafa', 3.1);
     key.position.set(-3, 5, 4);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -366,16 +366,16 @@ export default function MovementDemo({
     key.shadow.bias = -0.0004;
     key.shadow.normalBias = 0.02;
     lights.add(key);
-    const rim = new THREE.DirectionalLight('#d4ee89', 1.9);
+    const rim = new THREE.DirectionalLight('#efefef', 1.9);
     rim.position.set(3.5, 3, -3.5);
     lights.add(rim);
-    const fill = new THREE.DirectionalLight('#9fc8b6', 0.9);
+    const fill = new THREE.DirectionalLight('#cecece', 0.9);
     fill.position.set(4, 2, 3);
     lights.add(fill);
     const props = new THREE.Group();
     scene.add(props);
     const steel = own(
-      new THREE.MeshStandardMaterial({ color: '#b9c6bf', metalness: 0.85, roughness: 0.28 }),
+      new THREE.MeshStandardMaterial({ color: '#d2d2d2', metalness: 0.85, roughness: 0.28 }),
     );
     const box = (
       position: number[],
@@ -405,16 +405,16 @@ export default function MovementDemo({
       new THREE.Mesh(
         new THREE.CircleGeometry(7, 64),
         new THREE.MeshStandardMaterial({
-          color: '#1a362b',
+          color: '#252525',
           roughness: 0.95,
           transparent: true,
           alphaMap: own(
             gradientTexture(
               256,
               [
-                [0, '#fff'],
-                [0.2, '#fff'],
-                [0.78, '#000'],
+                [0, '#ffffff'],
+                [0.2, '#ffffff'],
+                [0.78, '#000000'],
               ],
               { colorSpace: THREE.NoColorSpace },
             ),
@@ -431,8 +431,8 @@ export default function MovementDemo({
         new THREE.MeshBasicMaterial({
           map: own(
             gradientTexture(128, [
-              [0, 'rgba(118,156,135,0.34)'],
-              [1, 'rgba(118,156,135,0)'],
+              [0, 'rgba(156, 156, 156, 0.34)'],
+              [1, 'rgba(156, 156, 156, 0)'],
             ]),
           ),
           transparent: true,
@@ -460,16 +460,16 @@ export default function MovementDemo({
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = -0.042;
     }
-    box([0, -0.03, 0], [1.5, 0.025, floorPose ? 2.8 : 1.5], '#2a4b3d', 0, 0.011);
+    box([0, -0.03, 0], [1.5, 0.025, floorPose ? 2.8 : 1.5], '#393939', 0, 0.011);
     const contact = decor(
       new THREE.Mesh(
         new THREE.PlaneGeometry(1, 1),
         new THREE.MeshBasicMaterial({
           map: own(
             gradientTexture(128, [
-              [0, 'rgba(4,10,7,0.62)'],
-              [0.55, 'rgba(4,10,7,0.28)'],
-              [1, 'rgba(4,10,7,0)'],
+              [0, 'rgba(3, 3, 3, 0.62)'],
+              [0.55, 'rgba(3, 3, 3, 0.28)'],
+              [1, 'rgba(3, 3, 3, 0)'],
             ]),
           ),
           transparent: true,
@@ -480,7 +480,7 @@ export default function MovementDemo({
     contact.rotation.x = -Math.PI / 2;
     contact.position.y = -0.0165;
     contact.scale.set(floorPose ? 1.15 : 1.05, floorPose ? 2.3 : 1.05, 1);
-    const rubber = own(new THREE.MeshStandardMaterial({ color: '#202b26', roughness: 0.55 }));
+    const rubber = own(new THREE.MeshStandardMaterial({ color: '#1e1e1e', roughness: 0.55 }));
     const dumbbellGeometry = {
       handle: own(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 16)),
       head: own(new THREE.CylinderGeometry(0.085, 0.085, 0.07, 6)),
@@ -529,12 +529,12 @@ export default function MovementDemo({
         scene.add(model);
         rig = createTrainerRig(model);
         rig.getEquipment(exercise).forEach((e) => {
-          const pad = '#5f8570',
-            frame = '#2f4339';
+          const pad = '#7f7f7f',
+            frame = '#333333';
           const mesh = box(
             e.position,
             e.size,
-            e.kind === 'bench' ? pad : e.kind === 'wall' ? '#223b31' : frame,
+            e.kind === 'bench' ? pad : e.kind === 'wall' ? '#2a2a2a' : frame,
             e.rotationX || 0,
             e.kind === 'bench' ? 0.04 : 0.01,
           );
@@ -549,11 +549,11 @@ export default function MovementDemo({
           if (e.kind === 'bench') {
             for (const z of [-e.size[2] * 0.34, e.size[2] * 0.34]) {
               const y = Math.max(0.1, (e.position[1] - Math.tan(e.rotationX || 0) * z - 0.045) / 2);
-              box([e.position[0], y, e.position[2] + z], [0.06, y * 2, 0.065], '#aab8b0');
+              box([e.position[0], y, e.position[2] + z], [0.06, y * 2, 0.065], '#c3c3c3');
               box(
                 [e.position[0], 0.035, e.position[2] + z],
                 [0.62, 0.055, 0.12],
-                '#2f4339',
+                '#333333',
                 0,
                 0.02,
               );
@@ -563,7 +563,7 @@ export default function MovementDemo({
             box(
               [e.position[0], e.position[1] / 2, e.position[2] + 0.24],
               [0.055, e.position[1], 0.055],
-              '#718478',
+              '#828282',
             );
         });
         loaded = true;
